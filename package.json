@@ -7,9 +7,15 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "npm run type-check -- --watch",
+    "build:android": "cd android && ./gradlew clean && cd .. && npx react-native run-android",
+    "clean": "npx react-native clean"
   },
   "dependencies": {
+    "@react-native-community/slider": "^4.5.7",
+    "@types/react-native": "^0.72.8",
     "react": "18.2.0",
     "react-native": "0.72.7"
   },
