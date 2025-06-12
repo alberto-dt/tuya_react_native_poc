@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
-import SmartLifeService from '../services/SmartLifeService';
-import { TuyaUser, TuyaHome, TuyaDevice } from '../types/SmartLifeTypes';
+import { useState, useCallback, useRef } from 'react';
+import SmartLifeService from '@/services/SmartLifeService';
+import { TuyaUser, TuyaHome, TuyaDevice } from '@/types/SmartLifeTypes';
 
 interface UseSmartLifeState {
     isInitialized: boolean;
@@ -39,6 +38,9 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
         error: null,
     });
 
+    const stateRef = useRef(state);
+    stateRef.current = state;
+
     const updateState = useCallback((updates: Partial<UseSmartLifeState>) => {
         setState(prev => ({ ...prev, ...updates }));
     }, []);
@@ -66,10 +68,43 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
         }
     }, [setLoading, setError, updateState]);
 
+    const loadDevices = useCallback(async (homeId: number) => {
+        try {
+            setLoading(true);
+            setError(null);
+            const devices = await SmartLifeService.getDeviceList(homeId);
+            updateState({ devices });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to load devices';
+            setError(errorMessage);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    }, [setLoading, setError, updateState]);
+
+    const loadHomes = useCallback(async () => {
+        try {
+            setError(null);
+            const homes = await SmartLifeService.getHomeList();
+            updateState({ homes });
+
+            if (homes.length > 0 && !stateRef.current.selectedHome) {
+                const firstHome = homes[0];
+                updateState({ selectedHome: firstHome });
+                await loadDevices(firstHome.homeId);
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to load homes';
+            setError(errorMessage);
+            throw error;
+        }
+    }, [setError, updateState, loadDevices]);
+
     const login = useCallback(async (
         email: string,
         password: string,
-        countryCode: string = '1'
+        countryCode: string = '593'
     ) => {
         try {
             setLoading(true);
@@ -87,7 +122,7 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
         } finally {
             setLoading(false);
         }
-    }, [setLoading, setError, updateState]);
+    }, [setLoading, setError, updateState, loadHomes]);
 
     const loginWithPhone = useCallback(async (
         phone: string,
@@ -110,7 +145,7 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
         } finally {
             setLoading(false);
         }
-    }, [setLoading, setError, updateState]);
+    }, [setLoading, setError, updateState, loadHomes]);
 
     const logout = useCallback(async () => {
         try {
@@ -133,39 +168,6 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
         }
     }, [setLoading, setError, updateState]);
 
-    const loadHomes = useCallback(async () => {
-        try {
-            setError(null);
-            const homes = await SmartLifeService.getHomeList();
-            updateState({ homes });
-
-            if (homes.length > 0 && !state.selectedHome) {
-                const firstHome = homes[0];
-                updateState({ selectedHome: firstHome });
-                await loadDevices(firstHome.homeId);
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to load homes';
-            setError(errorMessage);
-            throw error;
-        }
-    }, [setError, updateState, state.selectedHome]);
-
-    const loadDevices = useCallback(async (homeId: number) => {
-        try {
-            setLoading(true);
-            setError(null);
-            const devices = await SmartLifeService.getDeviceList(homeId);
-            updateState({ devices });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to load devices';
-            setError(errorMessage);
-            throw error;
-        } finally {
-            setLoading(false);
-        }
-    }, [setLoading, setError, updateState]);
-
     const selectHome = useCallback(async (home: TuyaHome) => {
         updateState({ selectedHome: home });
         await loadDevices(home.homeId);
@@ -176,22 +178,21 @@ export const useSmartLife = (): UseSmartLifeState & UseSmartLifeActions => {
             setError(null);
             await SmartLifeService.controlDevice(deviceId, commands);
 
-            // Refresh devices after control
-            if (state.selectedHome) {
-                await loadDevices(state.selectedHome.homeId);
+            if (stateRef.current.selectedHome) {
+                await loadDevices(stateRef.current.selectedHome.homeId);
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to control device';
             setError(errorMessage);
             throw error;
         }
-    }, [setError, state.selectedHome, loadDevices]);
+    }, [setError, loadDevices]);
 
     const refreshDevices = useCallback(async () => {
-        if (state.selectedHome) {
-            await loadDevices(state.selectedHome.homeId);
+        if (stateRef.current.selectedHome) {
+            await loadDevices(stateRef.current.selectedHome.homeId);
         }
-    }, [state.selectedHome, loadDevices]);
+    }, [loadDevices]);
 
     const clearError = useCallback(() => {
         setError(null);

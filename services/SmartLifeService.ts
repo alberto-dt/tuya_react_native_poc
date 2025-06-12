@@ -1,15 +1,109 @@
+import {NativeModules} from 'react-native';
 
-import { NativeModules } from 'react-native';
-import {
-    SmartLifeModuleInterface,
-    TuyaUser,
-    TuyaHome,
-    TuyaDevice,
-    DeviceSchema,
-    DeviceCommand,
-    ColorHSV,
-    ColorRGB
-} from '@/types/SmartLifeTypes';
+export interface TuyaUser {
+    uid: string;
+    username: string;
+    email: string;
+    avatarUrl?: string;
+    headPic?: string;
+    nickName?: string;
+    phoneCode?: string;
+    mobile?: string;
+    timezoneId?: string;
+}
+
+export interface TuyaHome {
+    homeId: number;
+    name: string;
+    geoName: string;
+    lon: number;
+    lat: number;
+    address: string;
+}
+
+export interface TuyaDevice {
+    devId: string;
+    name: string;
+    iconUrl: string;
+    isOnline: boolean;
+    productId: string;
+    supportedFunctions: string[];
+}
+
+export interface DeviceSchema {
+    id: string;
+    mode: string;
+    code: string;
+    name: string;
+    type: string;
+    values?: any;
+    property?: any;
+}
+
+export interface DeviceCommand {
+    [key: string]: any;
+}
+
+export interface ColorRGB {
+    r: number;
+    g: number;
+    b: number;
+}
+
+export interface ColorHSV {
+    h: number;
+    s: number;
+    v: number;
+}
+
+export interface CreateHomeParams {
+    name: string;
+    geoName: string;
+    lat?: number;
+    lon?: number;
+}
+
+export interface UpdateHomeParams {
+    homeId: number;
+    name: string;
+    geoName: string;
+    lat?: number;
+    lon?: number;
+}
+
+interface SmartLifeModuleInterface {
+    initSDK(appKey: string, secretKey: string): Promise<string>;
+    initSDKWithDataCenter(appKey: string, secretKey: string, endpoint: string): Promise<string>;
+
+    loginWithEmail(countryCode: string, email: string, password: string): Promise<TuyaUser>;
+    loginWithPhone(phone: string, password: string, countryCode: string): Promise<TuyaUser>;
+    logout(): Promise<string>;
+
+    registerWithEmail(email: string, password: string, countryCode: string): Promise<TuyaUser>;
+    registerWithPhone(phone: string, password: string, countryCode: string): Promise<TuyaUser>;
+    registerWithEmailVerification(email: string, password: string, verificationCode: string, countryCode: string): Promise<TuyaUser>;
+    registerWithPhoneVerification(phone: string, password: string, verificationCode: string, countryCode: string): Promise<TuyaUser>;
+
+    sendEmailVerificationCode(email: string, countryCode: string): Promise<string>;
+    sendSMSVerificationCode(phone: string, countryCode: string): Promise<string>;
+    verifyEmailCode(email: string, verificationCode: string, countryCode: string): Promise<string>;
+    verifySMSCode(phone: string, verificationCode: string, countryCode: string): Promise<string>;
+
+    listAvailableMethods(): Promise<string>;
+    testBasicLogging(email: string, password: string): Promise<any>;
+    testMultipleServers(email: string, password: string): Promise<any>;
+
+    getHomeList(): Promise<TuyaHome[]>;
+    getDeviceList(homeId: number): Promise<TuyaDevice[]>;
+    controlDevice(deviceId: string, commands: string): Promise<string>;
+    getDeviceSchema(deviceId: string): Promise<DeviceSchema[]>;
+
+    createHome(homeName: string, geoName: string, lat: number, lon: number): Promise<TuyaHome>;
+    updateHome(homeId: number, homeName: string, geoName: string, lat: number, lon: number): Promise<string>;
+    deleteHome(homeId: number): Promise<string>;
+
+    destroy(): void;
+}
 
 const { SmartLifeModule } = NativeModules as {
     SmartLifeModule: SmartLifeModuleInterface;
@@ -30,13 +124,25 @@ class SmartLifeService {
         }
     }
 
+    async initSDKWithDataCenter(appKey: string, secretKey: string, endpoint: string): Promise<string> {
+        try {
+            const result = await SmartLifeModule.initSDKWithDataCenter(appKey, secretKey, endpoint);
+            this.isInitialized = true;
+            console.log('Smart Life SDK initialized with data center:', result);
+            return result;
+        } catch (error) {
+            console.error('Error initializing Smart Life SDK with data center:', error);
+            throw error;
+        }
+    }
+
     async loginWithEmail(
         email: string,
         password: string,
         countryCode: string = '593'
     ): Promise<TuyaUser> {
         try {
-            const user = await SmartLifeModule.loginWithEmail(email, password, countryCode);
+            const user = await SmartLifeModule.loginWithEmail(countryCode, email, password);
             console.log('Login successful:', user);
             return user;
         } catch (error) {
@@ -58,6 +164,125 @@ class SmartLifeService {
             console.error('Phone login error:', error);
             throw error;
         }
+    }
+
+    async logout(): Promise<string> {
+        try {
+            const result = await SmartLifeModule.logout();
+            console.log('Logout successful:', result);
+            return result;
+        } catch (error) {
+            console.error('Logout error:', error);
+            throw error;
+        }
+    }
+
+    async registerWithEmail(
+        email: string,
+        password: string,
+        countryCode: string = '1'
+    ): Promise<TuyaUser> {
+        try {
+            console.log('Registering with email:', email, 'countryCode:', countryCode);
+            const user = await SmartLifeModule.registerWithEmail(email, password, countryCode);
+            console.log('Email registration successful:', user);
+            return user;
+        } catch (error) {
+            console.error('Email registration error:', error);
+            throw error;
+        }
+    }
+
+    async createHome(params: CreateHomeParams): Promise<TuyaHome> {
+        try {
+            console.log('Creating home:', params);
+
+            const home = await SmartLifeModule.createHome(
+                params.name,
+                params.geoName,
+                params.lat || 0,
+                params.lon || 0
+            );
+
+            console.log('Home created successfully:', home);
+            return home;
+        } catch (error) {
+            console.error('Error creating home:', error);
+            throw error;
+        }
+    }
+
+    async updateHome(params: UpdateHomeParams): Promise<string> {
+        try {
+            console.log('Updating home:', params);
+
+            const result = await SmartLifeModule.updateHome(
+                params.homeId,
+                params.name,
+                params.geoName,
+                params.lat || 0,
+                params.lon || 0
+            );
+
+            console.log('Home updated successfully');
+            return result;
+        } catch (error) {
+            console.error('Error updating home:', error);
+            throw error;
+        }
+    }
+
+    async deleteHome(homeId: number): Promise<string> {
+        try {
+            console.log('Deleting home:', homeId);
+
+            const result = await SmartLifeModule.deleteHome(homeId);
+
+            console.log('Home deleted successfully');
+            return result;
+        } catch (error) {
+            console.error('Error deleting home:', error);
+            throw error;
+        }
+    }
+
+    async getCurrentLocation(): Promise<{lat: number, lon: number}> {
+        console.log('Using default location: Quito, Ecuador');
+
+        const ecuadorLocations = {
+            quito: { lat: -0.1807, lon: -78.4678, name: 'Quito' },
+            guayaquil: { lat: -2.1709, lon: -79.9224, name: 'Guayaquil' },
+            cuenca: { lat: -2.8963, lon: -79.0058, name: 'Cuenca' },
+            ambato: { lat: -1.2544, lon: -78.6267, name: 'Ambato' },
+            machala: { lat: -3.2581, lon: -79.9553, name: 'Machala' },
+            manta: { lat: -0.9677, lon: -80.7089, name: 'Manta' },
+            portoviejo: { lat: -1.0548, lon: -80.4545, name: 'Portoviejo' },
+            loja: { lat: -3.9927, lon: -79.2071, name: 'Loja' }
+        };
+
+        return Promise.resolve(ecuadorLocations.quito);
+    }
+
+    getAvailableLocations(): Array<{lat: number, lon: number, name: string}> {
+        return [
+            { lat: -0.1807, lon: -78.4678, name: 'Quito' },
+            { lat: -2.1709, lon: -79.9224, name: 'Guayaquil' },
+            { lat: -2.8963, lon: -79.0058, name: 'Cuenca' },
+            { lat: -1.2544, lon: -78.6267, name: 'Ambato' },
+            { lat: -3.2581, lon: -79.9553, name: 'Machala' },
+            { lat: -0.9677, lon: -80.7089, name: 'Manta' },
+            { lat: -1.0548, lon: -80.4545, name: 'Portoviejo' },
+            { lat: -3.9927, lon: -79.2071, name: 'Loja' }
+        ];
+    }
+
+    async getLocationByName(cityName: string): Promise<{lat: number, lon: number}> {
+        const locations = this.getAvailableLocations();
+        const location = locations.find(loc =>
+            loc.name.toLowerCase() === cityName.toLowerCase()
+        );
+
+        return location || { lat: -0.1807, lon: -78.4678 };
     }
 
     async getHomeList(): Promise<TuyaHome[]> {
@@ -84,7 +309,8 @@ class SmartLifeService {
 
     async controlDevice(deviceId: string, commands: DeviceCommand): Promise<string> {
         try {
-            const result = await SmartLifeModule.controlDevice(deviceId, commands);
+            const commandsString = JSON.stringify(commands);
+            const result = await SmartLifeModule.controlDevice(deviceId, commandsString);
             console.log('Device control result:', result);
             return result;
         } catch (error) {
@@ -104,30 +330,9 @@ class SmartLifeService {
         }
     }
 
-    async logout(): Promise<string> {
-        try {
-            const result = await SmartLifeModule.logout();
-            console.log('Logout successful:', result);
-            return result;
-        } catch (error) {
-            console.error('Logout error:', error);
-            throw error;
-        }
-    }
-
     async toggleSwitch(deviceId: string, switchNumber: number = 1): Promise<string> {
         return this.controlDevice(deviceId, {
             [`switch_${switchNumber}`]: true
-        });
-    }
-
-    async setSwitchState(
-        deviceId: string,
-        state: boolean,
-        switchNumber: number = 1
-    ): Promise<string> {
-        return this.controlDevice(deviceId, {
-            [`switch_${switchNumber}`]: state
         });
     }
 
@@ -157,18 +362,6 @@ class SmartLifeService {
 
         const hsv = this.rgbToHsv(rgb.r, rgb.g, rgb.b);
 
-        const colorData = {
-            h: Math.round(hsv.h),
-            s: Math.round(hsv.s * 10),
-            v: Math.round(hsv.v * 10)
-        };
-
-        return this.controlDevice(deviceId, {
-            colour_data: JSON.stringify(colorData)
-        });
-    }
-
-    async setHSVColor(deviceId: string, hsv: ColorHSV): Promise<string> {
         const colorData = {
             h: Math.round(hsv.h),
             s: Math.round(hsv.s * 10),
@@ -223,36 +416,19 @@ class SmartLifeService {
         };
     }
 
-    hsvToRgb(h: number, s: number, v: number): ColorRGB {
-        const c = v * s;
-        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-        const m = v - c;
-
-        let r = 0, g = 0, b = 0;
-
-        if (0 <= h && h < 60) {
-            r = c; g = x; b = 0;
-        } else if (60 <= h && h < 120) {
-            r = x; g = c; b = 0;
-        } else if (120 <= h && h < 180) {
-            r = 0; g = c; b = x;
-        } else if (180 <= h && h < 240) {
-            r = 0; g = x; b = c;
-        } else if (240 <= h && h < 300) {
-            r = x; g = 0; b = c;
-        } else if (300 <= h && h < 360) {
-            r = c; g = 0; b = x;
-        }
-
-        return {
-            r: Math.round((r + m) * 255),
-            g: Math.round((g + m) * 255),
-            b: Math.round((b + m) * 255)
-        };
-    }
-
     getInitializationStatus(): boolean {
         return this.isInitialized;
+    }
+
+    async destroy(): Promise<void> {
+        try {
+            SmartLifeModule.destroy();
+            this.isInitialized = false;
+            console.log('Smart Life SDK destroyed');
+        } catch (error) {
+            console.error('Error destroying SDK:', error);
+            throw error;
+        }
     }
 }
 
