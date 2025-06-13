@@ -19,7 +19,7 @@ interface HomeListScreenProps {
     user: TuyaUser;
     onLogout: () => void;
     onHomeSelected: (home: TuyaHome) => void;
-    onAddHome: () => void; // NUEVO
+    onAddHome: () => void;
 }
 
 const HomeListScreen: React.FC<HomeListScreenProps> = ({
@@ -33,7 +33,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Cargar hogares - ACTUALIZADO para ser accesible desde fuera
     const loadHomes = useCallback(async (isRefresh: boolean = false) => {
         try {
             if (isRefresh) {
@@ -50,7 +49,7 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
             setHomes(homeList);
 
             if (homeList.length === 0) {
-                setError(null); // No mostrar error si no hay hogares, solo mensaje informativo
+                setError(null);
             }
 
         } catch (err) {
@@ -72,22 +71,18 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
         }
     }, []);
 
-    // NUEVO: Método para recargar después de agregar hogar
     const handleHomeCreated = useCallback((newHome: TuyaHome) => {
         setHomes(prev => [...prev, newHome]);
     }, []);
 
-    // Exponer el método de recarga para uso externo
     React.useImperativeHandle(React.createRef(), () => ({
         reloadHomes: () => loadHomes(true)
     }), [loadHomes]);
 
-    // Cargar hogares al montar el componente
     useEffect(() => {
         loadHomes();
     }, [loadHomes]);
 
-    // Manejar selección de hogar
     const handleHomePress = useCallback((home: TuyaHome) => {
         Alert.alert(
             'Seleccionar Hogar',
@@ -105,12 +100,10 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
         );
     }, [onHomeSelected]);
 
-    // Manejar refresh
     const handleRefresh = useCallback(() => {
         loadHomes(true);
     }, [loadHomes]);
 
-    // Manejar logout
     const handleLogout = useCallback(async () => {
         Alert.alert(
             'Cerrar Sesión',
@@ -126,12 +119,10 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
         );
     }, [onLogout]);
 
-    // NUEVO: Manejar agregar hogar
     const handleAddHome = useCallback(() => {
         onAddHome();
     }, [onAddHome]);
 
-    // Componente para mostrar un hogar individual
     const HomeCard: React.FC<{ home: TuyaHome }> = ({ home }) => (
         <TouchableOpacity
             style={styles.homeCard}
@@ -184,7 +175,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#4CAF50" />
 
-            {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerContent}>
                     <View>
@@ -210,7 +200,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
                 </View>
             </View>
 
-            {/* Contenido principal */}
             <ScrollView
                 style={styles.content}
                 contentContainerStyle={styles.scrollContent}
@@ -242,7 +231,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
                             No tienes hogares configurados aún.{'\n\n'}
                             ¡Crea tu primer hogar para comenzar a agregar y controlar dispositivos inteligentes!
                         </Text>
-                        {/* NUEVO: Botón principal para agregar hogar */}
                         <TouchableOpacity
                             style={styles.addHomeButton}
                             onPress={handleAddHome}
@@ -262,7 +250,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
                             <HomeCard key={home.homeId} home={home} />
                         ))}
 
-                        {/* NUEVO: Botón para agregar más hogares */}
                         <TouchableOpacity
                             style={styles.addMoreButton}
                             onPress={handleAddHome}

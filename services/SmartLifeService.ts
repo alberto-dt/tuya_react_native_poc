@@ -28,6 +28,14 @@ export interface TuyaDevice {
     isOnline: boolean;
     productId: string;
     supportedFunctions: string[];
+
+    uuid?: string;
+    category?: string;
+    productName?: string;
+    isLocalOnline?: boolean;
+    isSub?: boolean;
+    isShare?: boolean;
+    status?: { [key: string]: any };
 }
 
 export interface DeviceSchema {
@@ -71,6 +79,41 @@ export interface UpdateHomeParams {
     lon?: number;
 }
 
+export interface DeviceStatus {
+    switch_1?: boolean;
+    switch_2?: boolean;
+    switch_3?: boolean;
+
+    bright_value?: number;
+    temp_value?: number;
+    colour_data?: string;
+    work_mode?: string;
+
+    temp_current?: number;
+    humidity_value?: number;
+    battery_percentage?: number;
+
+    cur_power?: number;
+    cur_voltage?: number;
+    cur_current?: number;
+
+    [key: string]: any;
+}
+
+export interface SwitchCommand {
+    switch_1?: boolean;
+    switch_2?: boolean;
+    switch_3?: boolean;
+}
+
+export interface LightCommand {
+    switch_1?: boolean;
+    bright_value?: number;
+    temp_value?: number;
+    colour_data?: string;
+    work_mode?: 'white' | 'colour' | 'scene' | 'music';
+}
+
 interface SmartLifeModuleInterface {
     initSDK(appKey: string, secretKey: string): Promise<string>;
     initSDKWithDataCenter(appKey: string, secretKey: string, endpoint: string): Promise<string>;
@@ -101,6 +144,12 @@ interface SmartLifeModuleInterface {
     createHome(homeName: string, geoName: string, lat: number, lon: number): Promise<TuyaHome>;
     updateHome(homeId: number, homeName: string, geoName: string, lat: number, lon: number): Promise<string>;
     deleteHome(homeId: number): Promise<string>;
+
+    // Device pairing methods
+    startDevicePairing(homeId: number, ssid: string, password: string, timeout: number): Promise<TuyaDevice>;
+    startDevicePairingEZ(homeId: number, ssid: string, password: string, timeout: number): Promise<TuyaDevice>;
+    stopDevicePairing(): Promise<string>;
+    getCurrentWifiSSID(): Promise<string>;
 
     destroy(): void;
 }
@@ -330,9 +379,72 @@ class SmartLifeService {
         }
     }
 
+    // Device pairing methods
+    async startDevicePairing(
+        homeId: number,
+        ssid: string,
+        password: string,
+        timeout: number = 120
+    ): Promise<TuyaDevice> {
+        try {
+            console.log('Starting device pairing (AP mode):', { homeId, ssid, timeout });
+            const device = await SmartLifeModule.startDevicePairing(homeId, ssid, password, timeout);
+            console.log('Device paired successfully:', device);
+            return device;
+        } catch (error) {
+            console.error('Error pairing device:', error);
+            throw error;
+        }
+    }
+
+    async startDevicePairingEZ(
+        homeId: number,
+        ssid: string,
+        password: string,
+        timeout: number = 120
+    ): Promise<TuyaDevice> {
+        try {
+            console.log('Starting device pairing (EZ mode):', { homeId, ssid, timeout });
+            const device = await SmartLifeModule.startDevicePairingEZ(homeId, ssid, password, timeout);
+            console.log('Device EZ paired successfully:', device);
+            return device;
+        } catch (error) {
+            console.error('Error EZ pairing device:', error);
+            throw error;
+        }
+    }
+
+    async stopDevicePairing(): Promise<string> {
+        try {
+            const result = await SmartLifeModule.stopDevicePairing();
+            console.log('Device pairing stopped:', result);
+            return result;
+        } catch (error) {
+            console.error('Error stopping device pairing:', error);
+            throw error;
+        }
+    }
+
+    async getCurrentWifiSSID(): Promise<string> {
+        try {
+            const ssid = await SmartLifeModule.getCurrentWifiSSID();
+            console.log('Current WiFi SSID:', ssid);
+            return ssid;
+        } catch (error) {
+            console.error('Error getting WiFi SSID:', error);
+            throw error;
+        }
+    }
+
     async toggleSwitch(deviceId: string, switchNumber: number = 1): Promise<string> {
         return this.controlDevice(deviceId, {
             [`switch_${switchNumber}`]: true
+        });
+    }
+
+    async setSwitchState(deviceId: string, state: boolean, switchNumber: number = 1): Promise<string> {
+        return this.controlDevice(deviceId, {
+            [`switch_${switchNumber}`]: state
         });
     }
 

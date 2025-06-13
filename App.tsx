@@ -18,9 +18,11 @@ import SmartLifeService from './services/SmartLifeService';
 import RegisterScreen from './components/RegisterScreen';
 import HomeListScreen from './components/HomeListScreen';
 import AddHomeScreen from './components/AddHomeScreen';
-import type { TuyaUser, TuyaHome } from './services/SmartLifeService';
+import DeviceListScreen from './components/DeviceListScreen';
+import AddDeviceScreen from './components/AddDeviceScreen';
+import type { TuyaUser, TuyaHome, TuyaDevice } from './services/SmartLifeService';
 
-type AppScreen = 'login' | 'register' | 'home' | 'homeList' | 'addHome' | 'deviceList';
+type AppScreen = 'login' | 'register' | 'home' | 'homeList' | 'addHome' | 'deviceList' | 'addDevice';
 
 const App: React.FC = () => {
   const emailRef = useRef('');
@@ -79,6 +81,7 @@ const App: React.FC = () => {
 
     initializeSDK();
   }, [requestLocationPermission]);
+
   const validateCredentials = useCallback((): boolean => {
     if (!emailRef.current.trim() || !passwordRef.current.trim()) {
       Alert.alert('Error', 'Por favor ingresa email y contraseña');
@@ -138,6 +141,38 @@ const App: React.FC = () => {
       currentScreen: 'deviceList',
     });
   }, [updateUiState]);
+
+  const goToAddDevice = useCallback((): void => {
+    updateUiState({
+      currentScreen: 'addDevice'
+    });
+  }, [updateUiState]);
+
+  const handleDeviceAdded = useCallback((newDevice: TuyaDevice): void => {
+    updateUiState({
+      currentScreen: 'deviceList'
+    });
+
+    Alert.alert(
+        '¡Dispositivo Agregado! 🎉',
+        `El dispositivo "${newDevice.name}" ha sido agregado exitosamente a tu hogar "${selectedHome?.name}".`,
+        [{ text: 'OK' }]
+    );
+  }, [updateUiState, selectedHome]);
+
+  const handleCancelAddDevice = useCallback((): void => {
+    updateUiState({
+      currentScreen: 'deviceList'
+    });
+  }, [updateUiState]);
+
+  const handleBackToHomes = useCallback((): void => {
+    updateUiState({
+      currentScreen: 'homeList',
+      selectedHome: null,
+    });
+  }, [updateUiState]);
+
   const handleLoginSuccess = useCallback((userData: TuyaUser): void => {
     goToHomeList(userData);
     Alert.alert(
@@ -155,6 +190,7 @@ const App: React.FC = () => {
         `Cuenta creada y login exitoso!\n\nUsuario: ${newUser.username || newUser.email}`
     );
   }, [goToHomeList]);
+
   const handleLoginError = useCallback((error: Error): void => {
     console.error('Error in Login:', error);
 
@@ -196,6 +232,7 @@ const App: React.FC = () => {
       updateUiState({ isLoading: false });
     }
   }, [validateCredentials, updateUiState, handleLoginSuccess, handleLoginError]);
+
   const handleLogout = useCallback(async (): Promise<void> => {
     try {
       await SmartLifeService.logout();
@@ -296,45 +333,33 @@ const App: React.FC = () => {
             user={user}
             onLogout={handleLogout}
             onHomeSelected={handleHomeSelected}
-            onAddHome={goToAddHome} // NUEVO
+            onAddHome={goToAddHome}
         />
     );
   }
 
+  // NUEVA PANTALLA DE DISPOSITIVOS MEJORADA
   if (currentScreen === 'deviceList' && user && selectedHome) {
     return (
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="light-content" backgroundColor="#FF9800" />
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            <View style={[styles.header, { backgroundColor: '#FF9800' }]}>
-              <Text style={styles.title}>Dispositivos</Text>
-              <Text style={styles.subtitle}>{selectedHome.name}</Text>
-            </View>
+        <DeviceListScreen
+            user={user}
+            home={selectedHome}
+            onLogout={handleLogout}
+            onBackToHomes={handleBackToHomes}
+            onAddDevice={goToAddDevice}
+        />
+    );
+  }
 
-            <View style={styles.userContainer}>
-              <Text style={styles.welcomeText}>🏠 {selectedHome.name}</Text>
-
-              <View style={styles.userInfo}>
-                <Text style={styles.userDetail}>📋 Próximamente: Lista de dispositivos</Text>
-                <Text style={styles.userDetail}>🔧 Control de dispositivos</Text>
-                <Text style={styles.userDetail}>⚡ Estados en tiempo real</Text>
-                <Text style={styles.userDetail}>🏠 Hogar ID: {selectedHome.homeId}</Text>
-                <Text style={styles.userDetail}>📍 Ubicación: {selectedHome.geoName}</Text>
-              </View>
-
-              <TouchableOpacity
-                  style={[styles.button, styles.backToHomesButton]}
-                  onPress={() => updateUiState({ currentScreen: 'homeList' })}
-              >
-                <Text style={styles.buttonText}>← Volver a Hogares</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
-                <Text style={[styles.buttonText, styles.logoutButtonText]}>🚪 Cerrar Sesión</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
+  // NUEVA PANTALLA PARA AGREGAR DISPOSITIVOS
+  if (currentScreen === 'addDevice' && user && selectedHome) {
+    return (
+        <AddDeviceScreen
+            user={user}
+            home={selectedHome}
+            onDeviceAdded={handleDeviceAdded}
+            onCancel={handleCancelAddDevice}
+        />
     );
   }
 
@@ -449,13 +474,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#4CAF50',
   },
-  logoutButton: {
-    backgroundColor: '#f44336',
-  },
-  backToHomesButton: {
-    backgroundColor: '#FF9800',
-    marginBottom: 10,
-  },
   buttonDisabled: {
     opacity: 0.6,
   },
@@ -466,31 +484,6 @@ const styles = StyleSheet.create({
   },
   registerButtonText: {
     color: '#4CAF50',
-  },
-  logoutButtonText: {
-    color: 'white',
-  },
-  userContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    marginBottom: 20,
-  },
-  userInfo: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 20,
-    width: '100%',
-    marginBottom: 20,
-  },
-  userDetail: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
   },
 });
 

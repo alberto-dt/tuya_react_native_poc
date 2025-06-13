@@ -10,16 +10,19 @@ import {
     RefreshControl,
     SafeAreaView,
     StatusBar,
+    Switch,
+    Modal,
 } from 'react-native';
 
 import SmartLifeService from '../services/SmartLifeService';
-import type { TuyaDevice, TuyaHome, TuyaUser } from '@/services/SmartLifeService';
+import type { TuyaDevice, TuyaHome, TuyaUser } from '../services/SmartLifeService';
 
 interface DeviceListScreenProps {
     user: TuyaUser;
     home: TuyaHome;
     onLogout: () => void;
     onBackToHomes: () => void;
+    onAddDevice?: () => void;
 }
 
 const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
@@ -27,11 +30,15 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                                                                home,
                                                                onLogout,
                                                                onBackToHomes,
+                                                               onAddDevice,
                                                            }) => {
     const [devices, setDevices] = useState<TuyaDevice[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [selectedDevice, setSelectedDevice] = useState<TuyaDevice | null>(null);
+    const [isDeviceModalVisible, setIsDeviceModalVisible] = useState<boolean>(false);
+    const [controllingDevices, setControllingDevices] = useState<Set<string>>(new Set());
 
     const loadDevices = useCallback(async (isRefresh: boolean = false) => {
         try {
@@ -47,10 +54,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
             console.log('Devices loaded:', deviceList);
             setDevices(deviceList);
-
-            if (deviceList.length === 0) {
-                setError('No se encontraron dispositivos en este hogar. Asegúrate de tener dispositivos configurados en la app Smart Life.');
-            }
 
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -76,16 +79,51 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
     }, [loadDevices]);
 
     const handleDevicePress = useCallback((device: TuyaDevice) => {
-        Alert.alert(
-            device.name,
-            `Dispositivo: ${device.name}\n` +
-            `ID: ${device.devId}\n` +
-            `Estado: ${device.isOnline ? '🟢 En línea' : '🔴 Desconectado'}\n\n` +
-            `Próximamente: Control detallado del dispositivo`,
-            [
-                { text: 'OK', style: 'cancel' }
-            ]
-        );
+        setSelectedDevice(device);
+        setIsDeviceModalVisible(true);
+    }, []);
+
+    const handleSwitchToggle = useCallback(async (device: TuyaDevice, switchNumber: number = 1) => {
+        try {
+            setControllingDevices(prev => new Set(prev).add(device.devId));
+
+            const currentState = device.status?.[`switch_${switchNumber}`] || false;
+            const newState = !currentState;
+
+            console.log(`Toggling switch_${switchNumber} for device ${device.name}: ${currentState} -> ${newState}`);
+
+            const command = { [`switch_${switchNumber}`]: newState };
+            await SmartLifeService.controlDevice(device.devId, command);
+
+            setDevices(prevDevices =>
+                prevDevices.map(d =>
+                    d.devId === device.devId
+                        ? {
+                            ...d,
+                            status: {
+                                ...d.status,
+                                [`switch_${switchNumber}`]: newState
+                            }
+                        }
+                        : d
+                )
+            );
+
+            console.log(`Switch ${switchNumber} toggled successfully`);
+
+        } catch (error) {
+            console.error('Error controlling device:', error);
+            Alert.alert(
+                'Error de Control',
+                `No se pudo controlar el dispositivo: ${(error as Error).message}`
+            );
+        } finally {
+            setControllingDevices(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(device.devId);
+                return newSet;
+            });
+        }
     }, []);
 
     const handleRefresh = useCallback(() => {
@@ -107,44 +145,211 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
         );
     }, [onLogout]);
 
-    const DeviceCard: React.FC<{ device: TuyaDevice }> = ({ device }) => (
-        <TouchableOpacity
-            style={[
-                styles.deviceCard,
-                !device.isOnline && styles.deviceCardOffline
-            ]}
-            onPress={() => handleDevicePress(device)}
-            activeOpacity={0.7}
-        >
-            <View style={styles.deviceHeader}>
-                <View style={styles.deviceInfo}>
-                    <Text style={styles.deviceName}>{device.name}</Text>
-                    <Text style={styles.deviceId}>ID: {device.devId}</Text>
+    const getDeviceIcon = useCallback((category: string = '', productName: string = '') => {
+        const cat = category.toLowerCase();
+        const prod = productName.toLowerCase();
+
+        if (cat.includes('switch') || prod.includes('switch') || prod.includes('plug')) return '🔌';
+        if (cat.includes('light') || prod.includes('light') || prod.includes('bulb')) return '💡';
+        if (cat.includes('sensor') || prod.includes('sensor')) return '📡';
+        if (cat.includes('camera') || prod.includes('camera')) return '📷';
+        if (cat.includes('door') || prod.includes('door')) return '🚪';
+        if (cat.includes('curtain') || prod.includes('curtain')) return '🪟';
+        if (cat.includes('fan') || prod.includes('fan')) return '🌀';
+        if (cat.includes('thermostat') || prod.includes('thermostat')) return '🌡️';
+        return '📱';
+    }, []);
+
+    const getDeviceType = useCallback((device: TuyaDevice) => {
+        if (device.category) return device.category;
+        if (device.productName) return device.productName;
+        if (device.productId) return device.productId;
+        return 'Dispositivo';
+    }, []);
+
+    const isSwitch = useCallback((device: TuyaDevice) => {
+        return device.supportedFunctions?.includes('switch_1') ||
+            device.status?.hasOwnProperty('switch_1') ||
+            false;
+    }, []);
+
+    const getSwitchState = useCallback((device: TuyaDevice, switchNumber: number = 1) => {
+        return device.status?.[`switch_${switchNumber}`] || false;
+    }, []);
+
+    const DeviceCard: React.FC<{ device: TuyaDevice }> = ({ device }) => {
+        const deviceIcon = getDeviceIcon(device.category, device.productName);
+        const deviceType = getDeviceType(device);
+        const hasSwitch = isSwitch(device);
+        const switchState = getSwitchState(device, 1);
+        const isControlling = controllingDevices.has(device.devId);
+
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.deviceCard,
+                    !device.isOnline && styles.deviceCardOffline
+                ]}
+                onPress={() => handleDevicePress(device)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.deviceHeader}>
+                    <View style={styles.deviceInfo}>
+                        <View style={styles.deviceTitleRow}>
+                            <Text style={styles.deviceIcon}>{deviceIcon}</Text>
+                            <View style={styles.deviceTitleInfo}>
+                                <Text style={styles.deviceName}>{device.name}</Text>
+                                <Text style={styles.deviceProduct}>{deviceType}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.deviceId}>
+                            ID: {device.devId.length > 12 ? device.devId.substring(0, 12) + '...' : device.devId}
+                        </Text>
+                    </View>
+
+                    <View style={styles.deviceControls}>
+                        <View style={styles.deviceStatus}>
+                            <View style={[
+                                styles.statusIndicator,
+                                device.isOnline ? styles.statusOnline : styles.statusOffline
+                            ]} />
+                            <Text style={[
+                                styles.statusText,
+                                device.isOnline ? styles.statusTextOnline : styles.statusTextOffline
+                            ]}>
+                                {device.isOnline ? 'En línea' : 'Desconectado'}
+                            </Text>
+                        </View>
+
+                        {/* Control Switch si está disponible */}
+                        {hasSwitch && device.isOnline && (
+                            <View style={styles.switchControl}>
+                                <Text style={styles.switchLabel}>
+                                    {switchState ? 'Encendido' : 'Apagado'}
+                                </Text>
+                                <Switch
+                                    value={switchState}
+                                    onValueChange={() => handleSwitchToggle(device, 1)}
+                                    disabled={isControlling}
+                                    trackColor={{ false: '#ccc', true: '#4CAF50' }}
+                                    thumbColor={switchState ? '#2e7d32' : '#f4f3f4'}
+                                />
+                            </View>
+                        )}
+
+                        {isControlling && (
+                            <ActivityIndicator size="small" color="#FF9800" style={styles.controllingIndicator} />
+                        )}
+                    </View>
                 </View>
 
-                <View style={styles.deviceStatus}>
-                    <View style={[
-                        styles.statusIndicator,
-                        device.isOnline ? styles.statusOnline : styles.statusOffline
-                    ]} />
-                    <Text style={[
-                        styles.statusText,
-                        device.isOnline ? styles.statusTextOnline : styles.statusTextOffline
-                    ]}>
-                        {device.isOnline ? 'En línea' : 'Desconectado'}
-                    </Text>
+                {/* Funciones soportadas (si existen) */}
+                {device.supportedFunctions && device.supportedFunctions.length > 0 && (
+                    <View style={styles.functionsContainer}>
+                        <Text style={styles.functionsTitle}>Funciones:</Text>
+                        <View style={styles.functionsList}>
+                            {device.supportedFunctions.slice(0, 3).map((func, index) => (
+                                <Text key={index} style={styles.functionTag}>
+                                    {func}
+                                </Text>
+                            ))}
+                            {device.supportedFunctions.length > 3 && (
+                                <Text style={styles.functionTag}>
+                                    +{device.supportedFunctions.length - 3}
+                                </Text>
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                <View style={styles.deviceFooter}>
+                    <Text style={styles.tapHint}>Toca para más detalles →</Text>
                 </View>
-            </View>
+            </TouchableOpacity>
+        );
+    };
 
-            {device.productId && (
-                <Text style={styles.deviceProduct}>Producto: {device.productId}</Text>
-            )}
+    const DeviceModal: React.FC = () => {
+        if (!selectedDevice) return null;
 
-            <View style={styles.deviceFooter}>
-                <Text style={styles.tapHint}>Toca para más detalles →</Text>
-            </View>
-        </TouchableOpacity>
-    );
+        return (
+            <Modal
+                visible={isDeviceModalVisible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setIsDeviceModalVisible(false)}
+            >
+                <SafeAreaView style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity
+                            style={styles.modalCloseButton}
+                            onPress={() => setIsDeviceModalVisible(false)}
+                        >
+                            <Text style={styles.modalCloseText}>✕</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>{selectedDevice.name}</Text>
+                        <View style={styles.modalPlaceholder} />
+                    </View>
+
+                    <ScrollView style={styles.modalContent}>
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalSectionTitle}>📱 Información del Dispositivo</Text>
+                            <View style={styles.modalInfoCard}>
+                                <Text style={styles.modalInfoItem}>Nombre: {selectedDevice.name}</Text>
+                                <Text style={styles.modalInfoItem}>ID: {selectedDevice.devId}</Text>
+                                {selectedDevice.productName && (
+                                    <Text style={styles.modalInfoItem}>Producto: {selectedDevice.productName}</Text>
+                                )}
+                                {selectedDevice.category && (
+                                    <Text style={styles.modalInfoItem}>Categoría: {selectedDevice.category}</Text>
+                                )}
+                                {selectedDevice.productId && (
+                                    <Text style={styles.modalInfoItem}>Product ID: {selectedDevice.productId}</Text>
+                                )}
+                                <Text style={styles.modalInfoItem}>
+                                    Estado: {selectedDevice.isOnline ? '🟢 En línea' : '🔴 Desconectado'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {selectedDevice.supportedFunctions && selectedDevice.supportedFunctions.length > 0 && (
+                            <View style={styles.modalSection}>
+                                <Text style={styles.modalSectionTitle}>⚙️ Funciones Soportadas</Text>
+                                <View style={styles.modalFunctionsList}>
+                                    {selectedDevice.supportedFunctions.map((func, index) => (
+                                        <View key={index} style={styles.modalFunctionItem}>
+                                            <Text style={styles.modalFunctionText}>{func}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        {selectedDevice.status && Object.keys(selectedDevice.status).length > 0 && (
+                            <View style={styles.modalSection}>
+                                <Text style={styles.modalSectionTitle}>📊 Estado Actual</Text>
+                                <View style={styles.modalInfoCard}>
+                                    {Object.entries(selectedDevice.status).map(([key, value]) => (
+                                        <Text key={key} style={styles.modalInfoItem}>
+                                            {key}: {JSON.stringify(value)}
+                                        </Text>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalSectionTitle}>🛠️ Controles</Text>
+                            <Text style={styles.modalInfoText}>
+                                Los controles avanzados se implementarán próximamente.
+                                {'\n\n'}Por ahora puedes usar el switch en la lista principal para dispositivos compatibles.
+                            </Text>
+                        </View>
+                    </ScrollView>
+                </SafeAreaView>
+            </Modal>
+        );
+    };
 
     if (isLoading && !isRefreshing) {
         return (
@@ -232,6 +437,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             {'\n'}• Abre la app Smart Life
                             {'\n'}• Toca "+" para agregar dispositivo
                             {'\n'}• Sigue las instrucciones de emparejamiento
+                            {'\n'}• Los dispositivos aparecerán automáticamente aquí
                         </Text>
                         <TouchableOpacity
                             style={styles.retryButton}
@@ -239,6 +445,17 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                         >
                             <Text style={styles.retryButtonText}>🔄 Actualizar</Text>
                         </TouchableOpacity>
+
+                        {onAddDevice && (
+                            <TouchableOpacity
+                                style={styles.addDeviceButton}
+                                onPress={onAddDevice}
+                            >
+                                <Text style={styles.addDeviceButtonText}>
+                                    ➕ Agregar Primer Dispositivo
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 ) : (
                     <>
@@ -252,18 +469,31 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </Text>
                         </View>
 
+                        {onAddDevice && (
+                            <TouchableOpacity
+                                style={styles.addDeviceButton}
+                                onPress={onAddDevice}
+                            >
+                                <Text style={styles.addDeviceButtonText}>
+                                    ➕ Agregar Nuevo Dispositivo
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
                         {devices.map((device) => (
                             <DeviceCard key={device.devId} device={device} />
                         ))}
 
                         <View style={styles.footerInfo}>
                             <Text style={styles.footerText}>
-                                💡 Tip: Desliza hacia abajo para actualizar la lista
+                                💡 Tip: Desliza hacia abajo para actualizar • Toca los dispositivos para más detalles
                             </Text>
                         </View>
                     </>
                 )}
             </ScrollView>
+
+            <DeviceModal />
         </SafeAreaView>
     );
 };
@@ -379,30 +609,51 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 10,
+        marginBottom: 15,
     },
     deviceInfo: {
         flex: 1,
-        marginRight: 10,
+        marginRight: 15,
+    },
+    deviceTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    deviceIcon: {
+        fontSize: 24,
+        marginRight: 12,
+    },
+    deviceTitleInfo: {
+        flex: 1,
     },
     deviceName: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
+        marginBottom: 2,
+    },
+    deviceProduct: {
+        fontSize: 14,
+        color: '#666',
         marginBottom: 5,
     },
     deviceId: {
         fontSize: 12,
-        color: '#666',
+        color: '#999',
         backgroundColor: '#f0f0f0',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 4,
         alignSelf: 'flex-start',
     },
+    deviceControls: {
+        alignItems: 'flex-end',
+    },
     deviceStatus: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 10,
     },
     statusIndicator: {
         width: 8,
@@ -426,10 +677,39 @@ const styles = StyleSheet.create({
     statusTextOffline: {
         color: '#f44336',
     },
-    deviceProduct: {
-        fontSize: 14,
+    switchControl: {
+        alignItems: 'center',
+    },
+    switchLabel: {
+        fontSize: 12,
         color: '#666',
+        marginBottom: 5,
+    },
+    controllingIndicator: {
+        marginTop: 5,
+    },
+    functionsContainer: {
         marginBottom: 10,
+    },
+    functionsTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
+    },
+    functionsList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    functionTag: {
+        backgroundColor: '#e3f2fd',
+        color: '#1976d2',
+        fontSize: 11,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginRight: 6,
+        marginBottom: 4,
     },
     deviceFooter: {
         borderTopWidth: 1,
@@ -509,6 +789,126 @@ const styles = StyleSheet.create({
         color: '#1976d2',
         textAlign: 'center',
         lineHeight: 16,
+    },
+    // Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    modalHeader: {
+        backgroundColor: '#FF9800',
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    modalCloseButton: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 20,
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalCloseText: {
+        fontSize: 18,
+        color: 'white',
+        fontWeight: 'bold',
+    },
+    modalTitle: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: 'white',
+        textAlign: 'center',
+        marginHorizontal: 15,
+    },
+    modalPlaceholder: {
+        width: 40,
+    },
+    modalContent: {
+        flex: 1,
+        padding: 20,
+    },
+    modalSection: {
+        marginBottom: 20,
+    },
+    modalSectionTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+    },
+    modalInfoCard: {
+        backgroundColor: 'white',
+        borderRadius: 8,
+        padding: 15,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    modalInfoItem: {
+        fontSize: 14,
+        color: '#333',
+        marginBottom: 8,
+        paddingVertical: 2,
+    },
+    modalInfoText: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        fontStyle: 'italic',
+        lineHeight: 20,
+    },
+    modalFunctionsList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    modalFunctionItem: {
+        backgroundColor: 'white',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginRight: 8,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    modalFunctionText: {
+        fontSize: 12,
+        color: '#1976d2',
+        fontWeight: '500',
+    },
+    addDeviceButton: {
+        backgroundColor: '#4CAF50',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    addDeviceButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
 

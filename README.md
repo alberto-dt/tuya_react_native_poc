@@ -770,6 +770,14 @@ const handleLogin = async () => {
 
 ```
 
+Tu App (SDK)          Smart Life App
+↓                        ↓
+Servidor Tuya A      Servidor Tuya B
+(Tu App Key)         (Smart Life Key)
+↓                        ↓
+usuario@ejemplo.com  usuario@ejemplo.com
+(Cuenta diferente)   (Cuenta diferente)
+
 ## Recursos adicionales
 
 - [Developer Guide for Android](https://developer.tuya.com/en/docs/app-development/featureoverview?id=Ka69nt97vtsfu)
