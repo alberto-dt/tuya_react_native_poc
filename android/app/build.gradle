@@ -14,7 +14,7 @@ android {
     namespace "com.smartlifeapppoc"
     defaultConfig {
         applicationId "com.smartlifeapppoc"
-        minSdkVersion rootProject.ext.minSdkVersion
+        minSdkVersion 23  // Updated from 21 to 23 for Tuya SDK compatibility
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
@@ -67,6 +67,11 @@ android {
         flatDir {
             dirs 'libs'
         }
+        // Tuya Maven repositories - Required for BizBundle dependencies
+        maven { url 'https://maven-other.tuya.com/repository/maven-releases/' }
+        maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
+        google()
+        mavenCentral()
     }
 }
 
@@ -76,6 +81,13 @@ configurations.all {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+
+    // Tuya BizBundle dependencies
+    api enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
+    // Note: ThingSmartActivatorExtraBizBundle is deprecated and no longer maintained
+    // Its functionality has been migrated to the Device Pairing UI BizBundle
+    // If you need device pairing functionality, use:
+    // implementation 'com.thingclips.smart:thingsmart-bizbundle-device_activator'
 
     // Dependencias oficiales de Tuya SDK según documentación
     implementation fileTree(dir: 'libs', include: ['*.aar'])

@@ -1,4 +1,3 @@
-
 import type { TuyaDevice } from './SmartLifeService';
 
 export type TestDeviceType = 'switch' | 'light' | 'sensor' | 'plug' | 'fan' | 'thermostat';
@@ -427,7 +426,6 @@ export class TestDeviceUtils {
         return stats;
     }
 
-
     static generateHistoricalData(
         device: TuyaDevice,
         parameter: string,
@@ -476,7 +474,6 @@ export class TestDeviceUtils {
         }
     }
 
-
     static exportDeviceConfig(device: TuyaDevice): string {
         const config = {
             name: device.name,
@@ -506,6 +503,60 @@ export class TestDeviceUtils {
         } catch (error) {
             throw new Error(`Error importando configuración: ${(error as Error).message}`);
         }
+    }
+
+    // ======================== MÉTODOS DE ELIMINACIÓN ========================
+
+    static canDeleteDevice(device: TuyaDevice): {
+        canDelete: boolean;
+        reason?: string;
+        isTestDevice: boolean;
+    } {
+        const isTestDevice = this.isTestDevice(device.devId);
+
+        if (isTestDevice) {
+            return {
+                canDelete: true,
+                isTestDevice: true
+            };
+        } else {
+            return {
+                canDelete: false,
+                reason: 'Solo se pueden eliminar dispositivos de prueba desde esta aplicación',
+                isTestDevice: false
+            };
+        }
+    }
+
+    static getDeletionWarningMessage(device: TuyaDevice): string {
+        const isTestDevice = this.isTestDevice(device.devId);
+
+        if (isTestDevice) {
+            return `¿Estás seguro que quieres eliminar "${device.name}"?\n\nEste dispositivo de prueba se eliminará permanentemente.`;
+        } else {
+            return `No se puede eliminar "${device.name}" desde esta aplicación.\n\nPara eliminar dispositivos reales, usa la aplicación Smart Life oficial.`;
+        }
+    }
+
+    static getMultipleDeletionSummary(devices: TuyaDevice[]): {
+        totalDevices: number;
+        testDevices: number;
+        realDevices: number;
+        canDeleteCount: number;
+        warningMessage: string;
+    } {
+        const testDevices = devices.filter(d => this.isTestDevice(d.devId));
+        const realDevices = devices.filter(d => !this.isTestDevice(d.devId));
+
+        return {
+            totalDevices: devices.length,
+            testDevices: testDevices.length,
+            realDevices: realDevices.length,
+            canDeleteCount: testDevices.length,
+            warningMessage: testDevices.length > 0
+                ? `Se eliminarán ${testDevices.length} dispositivos de prueba permanentemente.`
+                : 'No hay dispositivos de prueba para eliminar.'
+        };
     }
 }
 

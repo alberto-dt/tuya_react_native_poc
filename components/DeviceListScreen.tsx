@@ -12,6 +12,9 @@ import {
     StatusBar,
     Switch,
     Modal,
+    ActionSheetIOS,
+    Platform,
+    AlertButton,
 } from 'react-native';
 
 import SmartLifeService from '../services/SmartLifeService';
@@ -39,6 +42,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
     const [selectedDevice, setSelectedDevice] = useState<TuyaDevice | null>(null);
     const [isDeviceModalVisible, setIsDeviceModalVisible] = useState<boolean>(false);
     const [controllingDevices, setControllingDevices] = useState<Set<string>>(new Set());
+    const [deletingDevices, setDeletingDevices] = useState<Set<string>>(new Set());
 
     const loadDevices = useCallback(async (isRefresh: boolean = false) => {
         try {
@@ -60,13 +64,15 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
             console.error('Error loading devices:', err);
             setError(`Error al cargar dispositivos: ${errorMessage}`);
 
+            const alertButtons: AlertButton[] = [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Reintentar', onPress: () => loadDevices(false) }
+            ];
+
             Alert.alert(
                 'Error',
                 `No se pudieron cargar los dispositivos:\n${errorMessage}\n\n¿Quieres intentar nuevamente?`,
-                [
-                    { text: 'Cancelar', style: 'cancel' },
-                    { text: 'Reintentar', onPress: () => loadDevices(false) }
-                ]
+                alertButtons
             );
         } finally {
             setIsLoading(false);
@@ -82,6 +88,205 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
         setSelectedDevice(device);
         setIsDeviceModalVisible(true);
     }, []);
+
+    const handleDeviceLongPress = useCallback((device: TuyaDevice) => {
+        const isTestDevice = device.devId.startsWith('test_') || device.devId.startsWith('mock_');
+
+        const options = [
+            'Ver Detalles',
+            ...(isTestDevice ? ['Eliminar Dispositivo'] : []),
+            'Cancelar'
+        ];
+
+        const destructiveButtonIndex = isTestDevice ? 1 : -1;
+        const cancelButtonIndex = options.length - 1;
+
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options,
+                    cancelButtonIndex,
+                    destructiveButtonIndex,
+                    title: device.name,
+                    message: `¿Qué quieres hacer con "${device.name}"?`,
+                },
+                (buttonIndex) => {
+                    if (buttonIndex === 0) {
+                        handleDevicePress(device);
+                    } else if (buttonIndex === destructiveButtonIndex) {
+                        handleDeleteDevice(device);
+                    }
+                }
+            );
+        } else {
+            // Android Alert
+            const alertButtons: AlertButton[] = [
+                {
+                    text: 'Ver Detalles',
+                    onPress: () => handleDevicePress(device)
+                }
+            ];
+
+            if (isTestDevice) {
+                alertButtons.push({
+                    text: 'Eliminar',
+                    style: 'destructive',
+                    onPress: () => handleDeleteDevice(device)
+                });
+            }
+
+            alertButtons.push({
+                text: 'Cancelar',
+                style: 'cancel'
+            });
+
+            Alert.alert(
+                device.name,
+                `¿Qué quieres hacer con "${device.name}"?`,
+                alertButtons
+            );
+        }
+    }, []);
+
+    const handleDeleteDevice = useCallback(async (device: TuyaDevice) => {
+        const isTestDevice = device.devId.startsWith('test_') || device.devId.startsWith('mock_');
+
+        if (!isTestDevice) {
+            const alertButtons: AlertButton[] = [
+                { text: 'Entendido' }
+            ];
+
+            Alert.alert(
+                'No Disponible',
+                'Solo se pueden eliminar dispositivos de prueba desde esta aplicación.\n\nPara eliminar dispositivos reales, usa la aplicación Smart Life oficial.',
+                alertButtons
+            );
+            return;
+        }
+
+        const confirmButtons: AlertButton[] = [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Eliminar',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        setDeletingDevices(prev => new Set(prev).add(device.devId));
+
+                        await SmartLifeService.removeDevice(device.devId, home.homeId);
+
+                        // Actualizar la lista de dispositivos
+                        setDevices(prevDevices =>
+                            prevDevices.filter(d => d.devId !== device.devId)
+                        );
+
+                        const successButtons: AlertButton[] = [
+                            { text: 'OK' }
+                        ];
+
+                        Alert.alert(
+                            'Dispositivo Eliminado',
+                            `"${device.name}" ha sido eliminado exitosamente.`,
+                            successButtons
+                        );
+
+                    } catch (error) {
+                        console.error('Error deleting device:', error);
+
+                        const errorButtons: AlertButton[] = [
+                            { text: 'OK' }
+                        ];
+
+                        Alert.alert(
+                            'Error',
+                            `No se pudo eliminar el dispositivo:\n${(error as Error).message}`,
+                            errorButtons
+                        );
+                    } finally {
+                        setDeletingDevices(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(device.devId);
+                            return newSet;
+                        });
+                    }
+                }
+            }
+        ];
+
+        Alert.alert(
+            'Eliminar Dispositivo',
+            `¿Estás seguro que quieres eliminar "${device.name}"?\n\nEsta acción no se puede deshacer.`,
+            confirmButtons
+        );
+    }, [home.homeId]);
+
+    const handleDeleteAllTestDevices = useCallback(async () => {
+        const testDevices = devices.filter(d =>
+            d.devId.startsWith('test_') || d.devId.startsWith('mock_')
+        );
+
+        if (testDevices.length === 0) {
+            const alertButtons: AlertButton[] = [
+                { text: 'OK' }
+            ];
+
+            Alert.alert(
+                'Sin Dispositivos de Prueba',
+                'No hay dispositivos de prueba para eliminar.',
+                alertButtons
+            );
+            return;
+        }
+
+        const confirmButtons: AlertButton[] = [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Eliminar Todos',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        setIsLoading(true);
+
+                        await SmartLifeService.clearAllTestDevices();
+
+                        // Recargar la lista de dispositivos
+                        await loadDevices(false);
+
+                        const successButtons: AlertButton[] = [
+                            { text: 'OK' }
+                        ];
+
+                        Alert.alert(
+                            'Dispositivos Eliminados',
+                            `Se eliminaron ${testDevices.length} dispositivos de prueba exitosamente.`,
+                            successButtons
+                        );
+
+                    } catch (error) {
+                        console.error('Error deleting all test devices:', error);
+
+                        const errorButtons: AlertButton[] = [
+                            { text: 'OK' }
+                        ];
+
+                        Alert.alert(
+                            'Error',
+                            `No se pudieron eliminar todos los dispositivos:\n${(error as Error).message}`,
+                            errorButtons
+                        );
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+            }
+        ];
+
+        Alert.alert(
+            'Eliminar Todos los Dispositivos de Prueba',
+            `¿Estás seguro que quieres eliminar todos los ${testDevices.length} dispositivos de prueba?\n\nEsta acción no se puede deshacer.`,
+            confirmButtons
+        );
+    }, [devices, loadDevices]);
 
     const handleSwitchToggle = useCallback(async (device: TuyaDevice, switchNumber: number = 1) => {
         try {
@@ -113,9 +318,15 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
         } catch (error) {
             console.error('Error controlling device:', error);
+
+            const errorButtons: AlertButton[] = [
+                { text: 'OK' }
+            ];
+
             Alert.alert(
                 'Error de Control',
-                `No se pudo controlar el dispositivo: ${(error as Error).message}`
+                `No se pudo controlar el dispositivo: ${(error as Error).message}`,
+                errorButtons
             );
         } finally {
             setControllingDevices(prev => {
@@ -131,17 +342,19 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
     }, [loadDevices]);
 
     const handleLogout = useCallback(async () => {
+        const confirmButtons: AlertButton[] = [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+                text: 'Cerrar Sesión',
+                style: 'destructive',
+                onPress: onLogout
+            }
+        ];
+
         Alert.alert(
             'Cerrar Sesión',
             '¿Estás seguro que quieres cerrar sesión?',
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Cerrar Sesión',
-                    style: 'destructive',
-                    onPress: onLogout
-                }
-            ]
+            confirmButtons
         );
     }, [onLogout]);
 
@@ -183,22 +396,34 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
         const hasSwitch = isSwitch(device);
         const switchState = getSwitchState(device, 1);
         const isControlling = controllingDevices.has(device.devId);
+        const isDeleting = deletingDevices.has(device.devId);
+        const isTestDevice = device.devId.startsWith('test_') || device.devId.startsWith('mock_');
 
         return (
             <TouchableOpacity
                 style={[
                     styles.deviceCard,
-                    !device.isOnline && styles.deviceCardOffline
+                    !device.isOnline && styles.deviceCardOffline,
+                    isDeleting && styles.deviceCardDeleting
                 ]}
                 onPress={() => handleDevicePress(device)}
+                onLongPress={() => handleDeviceLongPress(device)}
                 activeOpacity={0.7}
+                disabled={isDeleting}
             >
                 <View style={styles.deviceHeader}>
                     <View style={styles.deviceInfo}>
                         <View style={styles.deviceTitleRow}>
                             <Text style={styles.deviceIcon}>{deviceIcon}</Text>
                             <View style={styles.deviceTitleInfo}>
-                                <Text style={styles.deviceName}>{device.name}</Text>
+                                <View style={styles.deviceNameRow}>
+                                    <Text style={styles.deviceName}>{device.name}</Text>
+                                    {isTestDevice && (
+                                        <View style={styles.testBadge}>
+                                            <Text style={styles.testBadgeText}>TEST</Text>
+                                        </View>
+                                    )}
+                                </View>
                                 <Text style={styles.deviceProduct}>{deviceType}</Text>
                             </View>
                         </View>
@@ -221,7 +446,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </Text>
                         </View>
 
-                        {hasSwitch && device.isOnline && (
+                        {hasSwitch && device.isOnline && !isDeleting && (
                             <View style={styles.switchControl}>
                                 <Text style={styles.switchLabel}>
                                     {switchState ? 'Encendido' : 'Apagado'}
@@ -236,8 +461,12 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </View>
                         )}
 
-                        {isControlling && (
-                            <ActivityIndicator size="small" color="#FF9800" style={styles.controllingIndicator} />
+                        {(isControlling || isDeleting) && (
+                            <ActivityIndicator
+                                size="small"
+                                color={isDeleting ? "#f44336" : "#FF9800"}
+                                style={styles.controllingIndicator}
+                            />
                         )}
                     </View>
                 </View>
@@ -261,7 +490,12 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                 )}
 
                 <View style={styles.deviceFooter}>
-                    <Text style={styles.tapHint}>Toca para más detalles →</Text>
+                    <Text style={styles.tapHint}>
+                        {isDeleting
+                            ? '🗑️ Eliminando...'
+                            : 'Toca para detalles • Mantén presionado para opciones →'
+                        }
+                    </Text>
                 </View>
             </TouchableOpacity>
         );
@@ -269,6 +503,8 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
     const DeviceModal: React.FC = () => {
         if (!selectedDevice) return null;
+
+        const isTestDevice = selectedDevice.devId.startsWith('test_') || selectedDevice.devId.startsWith('mock_');
 
         return (
             <Modal
@@ -286,10 +522,32 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             <Text style={styles.modalCloseText}>✕</Text>
                         </TouchableOpacity>
                         <Text style={styles.modalTitle}>{selectedDevice.name}</Text>
-                        <View style={styles.modalPlaceholder} />
+                        {isTestDevice && (
+                            <TouchableOpacity
+                                style={styles.modalDeleteButton}
+                                onPress={() => {
+                                    setIsDeviceModalVisible(false);
+                                    handleDeleteDevice(selectedDevice);
+                                }}
+                            >
+                                <Text style={styles.modalDeleteText}>🗑️</Text>
+                            </TouchableOpacity>
+                        )}
+                        {!isTestDevice && <View style={styles.modalPlaceholder} />}
                     </View>
 
                     <ScrollView style={styles.modalContent}>
+                        {isTestDevice && (
+                            <View style={styles.modalSection}>
+                                <View style={styles.testDeviceWarning}>
+                                    <Text style={styles.testWarningIcon}>🧪</Text>
+                                    <Text style={styles.testWarningText}>
+                                        Este es un dispositivo de prueba virtual
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
                         <View style={styles.modalSection}>
                             <Text style={styles.modalSectionTitle}>📱 Información del Dispositivo</Text>
                             <View style={styles.modalInfoCard}>
@@ -306,6 +564,9 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                                 )}
                                 <Text style={styles.modalInfoItem}>
                                     Estado: {selectedDevice.isOnline ? '🟢 En línea' : '🔴 Desconectado'}
+                                </Text>
+                                <Text style={styles.modalInfoItem}>
+                                    Tipo: {isTestDevice ? '🧪 Dispositivo de Prueba' : '🏠 Dispositivo Real'}
                                 </Text>
                             </View>
                         </View>
@@ -343,6 +604,22 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                                 {'\n\n'}Por ahora puedes usar el switch en la lista principal para dispositivos compatibles.
                             </Text>
                         </View>
+
+                        {isTestDevice && (
+                            <View style={styles.modalSection}>
+                                <TouchableOpacity
+                                    style={styles.deleteDeviceButton}
+                                    onPress={() => {
+                                        setIsDeviceModalVisible(false);
+                                        handleDeleteDevice(selectedDevice);
+                                    }}
+                                >
+                                    <Text style={styles.deleteDeviceButtonText}>
+                                        🗑️ Eliminar Dispositivo de Prueba
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </ScrollView>
                 </SafeAreaView>
             </Modal>
@@ -378,6 +655,8 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
             </SafeAreaView>
         );
     }
+
+    const testDevices = devices.filter(d => d.devId.startsWith('test_') || d.devId.startsWith('mock_'));
 
     return (
         <SafeAreaView style={styles.container}>
@@ -463,20 +742,35 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </Text>
                             <Text style={styles.statsSubText}>
                                 🟢 {devices.filter(d => d.isOnline).length} en línea •
-                                🔴 {devices.filter(d => !d.isOnline).length} desconectado{devices.filter(d => !d.isOnline).length !== 1 ? 's' : ''}
+                                🔴 {devices.filter(d => !d.isOnline).length} desconectado{devices.filter(d => !d.isOnline).length !== 1 ? 's' : ''} •
+                                🧪 {testDevices.length} de prueba
                             </Text>
                         </View>
 
-                        {onAddDevice && (
-                            <TouchableOpacity
-                                style={styles.addDeviceButton}
-                                onPress={onAddDevice}
-                            >
-                                <Text style={styles.addDeviceButtonText}>
-                                    ➕ Agregar Nuevo Dispositivo
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                        {/* Botones de acción */}
+                        <View style={styles.actionButtonsContainer}>
+                            {onAddDevice && (
+                                <TouchableOpacity
+                                    style={styles.addDeviceButton}
+                                    onPress={onAddDevice}
+                                >
+                                    <Text style={styles.addDeviceButtonText}>
+                                        ➕ Agregar Dispositivo
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {testDevices.length > 0 && (
+                                <TouchableOpacity
+                                    style={styles.deleteAllButton}
+                                    onPress={handleDeleteAllTestDevices}
+                                >
+                                    <Text style={styles.deleteAllButtonText}>
+                                        🗑️ Eliminar Todos ({testDevices.length}) Dispositivos de Prueba
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
 
                         {devices.map((device) => (
                             <DeviceCard key={device.devId} device={device} />
@@ -484,7 +778,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
                         <View style={styles.footerInfo}>
                             <Text style={styles.footerText}>
-                                💡 Tip: Desliza hacia abajo para actualizar • Toca los dispositivos para más detalles
+                                💡 Tip: Desliza hacia abajo para actualizar • Toca para detalles • Mantén presionado para opciones
                             </Text>
                         </View>
                     </>
@@ -583,6 +877,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
     },
+    actionButtonsContainer: {
+        marginBottom: 15,
+    },
     deviceCard: {
         backgroundColor: 'white',
         borderRadius: 12,
@@ -602,6 +899,11 @@ const styles = StyleSheet.create({
     deviceCardOffline: {
         borderLeftColor: '#f44336',
         opacity: 0.7,
+    },
+    deviceCardDeleting: {
+        borderLeftColor: '#f44336',
+        opacity: 0.5,
+        backgroundColor: '#ffebee',
     },
     deviceHeader: {
         flexDirection: 'row',
@@ -625,11 +927,28 @@ const styles = StyleSheet.create({
     deviceTitleInfo: {
         flex: 1,
     },
+    deviceNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 2,
+    },
     deviceName: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 2,
+        flex: 1,
+    },
+    testBadge: {
+        backgroundColor: '#9C27B0',
+        borderRadius: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        marginLeft: 8,
+    },
+    testBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
     deviceProduct: {
         fontSize: 14,
@@ -719,6 +1038,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#FF9800',
         fontWeight: '500',
+        textAlign: 'center',
     },
     errorContainer: {
         backgroundColor: '#ffebee',
@@ -769,11 +1089,52 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         paddingVertical: 12,
         paddingHorizontal: 24,
+        marginBottom: 10,
     },
     retryButtonText: {
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
+    },
+    addDeviceButton: {
+        backgroundColor: '#4CAF50',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    addDeviceButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    deleteAllButton: {
+        backgroundColor: '#f44336',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 15,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    deleteAllButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
     footerInfo: {
         backgroundColor: '#e3f2fd',
@@ -813,6 +1174,17 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
     },
+    modalDeleteButton: {
+        backgroundColor: 'rgba(244, 67, 54, 0.8)',
+        borderRadius: 20,
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalDeleteText: {
+        fontSize: 18,
+    },
     modalTitle: {
         flex: 1,
         fontSize: 18,
@@ -836,6 +1208,25 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
         marginBottom: 10,
+    },
+    testDeviceWarning: {
+        backgroundColor: '#f3e5f5',
+        borderRadius: 8,
+        padding: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderLeftWidth: 4,
+        borderLeftColor: '#9C27B0',
+    },
+    testWarningIcon: {
+        fontSize: 24,
+        marginRight: 12,
+    },
+    testWarningText: {
+        fontSize: 14,
+        color: '#7B1FA2',
+        fontWeight: '600',
+        flex: 1,
     },
     modalInfoCard: {
         backgroundColor: 'white',
@@ -888,11 +1279,10 @@ const styles = StyleSheet.create({
         color: '#1976d2',
         fontWeight: '500',
     },
-    addDeviceButton: {
-        backgroundColor: '#4CAF50',
+    deleteDeviceButton: {
+        backgroundColor: '#f44336',
         borderRadius: 12,
         padding: 15,
-        marginBottom: 15,
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: {
@@ -903,7 +1293,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    addDeviceButtonText: {
+    deleteDeviceButtonText: {
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
