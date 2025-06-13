@@ -154,7 +154,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
         </TouchableOpacity>
     );
 
-    // Pantalla de loading
     if (isLoading && !isRefreshing) {
         return (
             <SafeAreaView style={styles.container}>

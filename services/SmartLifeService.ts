@@ -78,40 +78,13 @@ export interface UpdateHomeParams {
     lat?: number;
     lon?: number;
 }
-
-export interface DeviceStatus {
-    switch_1?: boolean;
-    switch_2?: boolean;
-    switch_3?: boolean;
-
-    bright_value?: number;
-    temp_value?: number;
-    colour_data?: string;
-    work_mode?: string;
-
-    temp_current?: number;
-    humidity_value?: number;
-    battery_percentage?: number;
-
-    cur_power?: number;
-    cur_voltage?: number;
-    cur_current?: number;
-
-    [key: string]: any;
-}
-
-export interface SwitchCommand {
-    switch_1?: boolean;
-    switch_2?: boolean;
-    switch_3?: boolean;
-}
-
-export interface LightCommand {
-    switch_1?: boolean;
-    bright_value?: number;
-    temp_value?: number;
-    colour_data?: string;
-    work_mode?: 'white' | 'colour' | 'scene' | 'music';
+export interface MockDeviceConfig {
+    name: string;
+    type: 'switch' | 'light' | 'sensor' | 'plug' | 'fan' | 'thermostat';
+    category: string;
+    online: boolean;
+    features: string[];
+    initialState?: { [key: string]: any };
 }
 
 interface SmartLifeModuleInterface {
@@ -145,7 +118,7 @@ interface SmartLifeModuleInterface {
     updateHome(homeId: number, homeName: string, geoName: string, lat: number, lon: number): Promise<string>;
     deleteHome(homeId: number): Promise<string>;
 
-    // Device pairing methods
+    // Device pairing methods (EXISTENTES)
     startDevicePairing(homeId: number, ssid: string, password: string, timeout: number): Promise<TuyaDevice>;
     startDevicePairingEZ(homeId: number, ssid: string, password: string, timeout: number): Promise<TuyaDevice>;
     stopDevicePairing(): Promise<string>;
@@ -160,6 +133,10 @@ const { SmartLifeModule } = NativeModules as {
 
 class SmartLifeService {
     private isInitialized: boolean = false;
+    private pairingInProgress: boolean = false;
+    private pairingTimer: NodeJS.Timeout | null = null;
+
+    private localTestDevices: TuyaDevice[] = [];
 
     async initSDK(appKey: string, secretKey: string): Promise<string> {
         try {
@@ -173,17 +150,6 @@ class SmartLifeService {
         }
     }
 
-    async initSDKWithDataCenter(appKey: string, secretKey: string, endpoint: string): Promise<string> {
-        try {
-            const result = await SmartLifeModule.initSDKWithDataCenter(appKey, secretKey, endpoint);
-            this.isInitialized = true;
-            console.log('Smart Life SDK initialized with data center:', result);
-            return result;
-        } catch (error) {
-            console.error('Error initializing Smart Life SDK with data center:', error);
-            throw error;
-        }
-    }
 
     async loginWithEmail(
         email: string,
@@ -196,21 +162,6 @@ class SmartLifeService {
             return user;
         } catch (error) {
             console.error('Login error:', error);
-            throw error;
-        }
-    }
-
-    async loginWithPhone(
-        phone: string,
-        password: string,
-        countryCode: string = '1'
-    ): Promise<TuyaUser> {
-        try {
-            const user = await SmartLifeModule.loginWithPhone(phone, password, countryCode);
-            console.log('Phone login successful:', user);
-            return user;
-        } catch (error) {
-            console.error('Phone login error:', error);
             throw error;
         }
     }
@@ -347,20 +298,53 @@ class SmartLifeService {
 
     async getDeviceList(homeId: number): Promise<TuyaDevice[]> {
         try {
-            const devices = await SmartLifeModule.getDeviceList(homeId);
-            console.log('Devices retrieved:', devices);
-            return devices;
+            let realDevices: TuyaDevice[] = [];
+
+            // Intentar obtener dispositivos reales
+            try {
+                realDevices = await SmartLifeModule.getDeviceList(homeId);
+                console.log('Real devices retrieved:', realDevices.length);
+            } catch (error) {
+                console.warn('Error getting real devices, continuing with test devices only:', error);
+            }
+
+            // Obtener dispositivos de prueba locales
+            const testDevices = this.localTestDevices.filter(device =>
+                device.devId.includes('test_') || device.devId.includes('mock_')
+            );
+
+            // Combinar dispositivos reales y de prueba
+            const allDevices = [...realDevices, ...testDevices];
+
+            console.log('Total devices retrieved:', {
+                real: realDevices.length,
+                test: testDevices.length,
+                total: allDevices.length
+            });
+
+            return allDevices;
         } catch (error) {
-            console.error('Error getting devices:', error);
-            throw error;
+            console.error('Error getting device list:', error);
+            // En caso de error, devolver solo dispositivos de prueba
+            return this.localTestDevices;
         }
     }
 
     async controlDevice(deviceId: string, commands: DeviceCommand): Promise<string> {
         try {
+            console.log('=== CONTROL DEVICE ===');
+            console.log('Device ID:', deviceId);
+            console.log('Commands:', commands);
+
+            // Verificar si es un dispositivo de prueba
+            if (this.isTestDevice(deviceId)) {
+                return await this.controlTestDevice(deviceId, commands);
+            }
+
+            // Control de dispositivo real (código existente)
             const commandsString = JSON.stringify(commands);
             const result = await SmartLifeModule.controlDevice(deviceId, commandsString);
-            console.log('Device control result:', result);
+            console.log('Real device control result:', result);
             return result;
         } catch (error) {
             console.error('Error controlling device:', error);
@@ -368,56 +352,18 @@ class SmartLifeService {
         }
     }
 
-    async getDeviceSchema(deviceId: string): Promise<DeviceSchema[]> {
-        try {
-            const schema = await SmartLifeModule.getDeviceSchema(deviceId);
-            console.log('Device schema:', schema);
-            return schema;
-        } catch (error) {
-            console.error('Error getting device schema:', error);
-            throw error;
-        }
-    }
-
-    // Device pairing methods
-    async startDevicePairing(
-        homeId: number,
-        ssid: string,
-        password: string,
-        timeout: number = 120
-    ): Promise<TuyaDevice> {
-        try {
-            console.log('Starting device pairing (AP mode):', { homeId, ssid, timeout });
-            const device = await SmartLifeModule.startDevicePairing(homeId, ssid, password, timeout);
-            console.log('Device paired successfully:', device);
-            return device;
-        } catch (error) {
-            console.error('Error pairing device:', error);
-            throw error;
-        }
-    }
-
-    async startDevicePairingEZ(
-        homeId: number,
-        ssid: string,
-        password: string,
-        timeout: number = 120
-    ): Promise<TuyaDevice> {
-        try {
-            console.log('Starting device pairing (EZ mode):', { homeId, ssid, timeout });
-            const device = await SmartLifeModule.startDevicePairingEZ(homeId, ssid, password, timeout);
-            console.log('Device EZ paired successfully:', device);
-            return device;
-        } catch (error) {
-            console.error('Error EZ pairing device:', error);
-            throw error;
-        }
-    }
 
     async stopDevicePairing(): Promise<string> {
         try {
             const result = await SmartLifeModule.stopDevicePairing();
             console.log('Device pairing stopped:', result);
+            this.pairingInProgress = false;
+
+            if (this.pairingTimer) {
+                clearTimeout(this.pairingTimer);
+                this.pairingTimer = null;
+            }
+
             return result;
         } catch (error) {
             console.error('Error stopping device pairing:', error);
@@ -425,26 +371,232 @@ class SmartLifeService {
         }
     }
 
-    async getCurrentWifiSSID(): Promise<string> {
+    async addTestDevice(
+        homeId: number,
+        deviceName: string,
+        deviceType: 'switch' | 'light' | 'sensor' | 'plug' | 'fan' | 'thermostat' = 'switch'
+    ): Promise<TuyaDevice> {
         try {
-            const ssid = await SmartLifeModule.getCurrentWifiSSID();
-            console.log('Current WiFi SSID:', ssid);
-            return ssid;
+            console.log('Agregando dispositivo de prueba:', { homeId, deviceName, deviceType });
+
+            // Crear dispositivo mock localmente
+            const mockDevice = this.createLocalMockDevice(deviceName, deviceType);
+            this.localTestDevices.push(mockDevice);
+
+            console.log('Dispositivo de prueba creado localmente:', mockDevice);
+            return mockDevice;
         } catch (error) {
-            console.error('Error getting WiFi SSID:', error);
+            console.error('Error agregando dispositivo de prueba:', error);
             throw error;
         }
     }
 
-    async toggleSwitch(deviceId: string, switchNumber: number = 1): Promise<string> {
-        return this.controlDevice(deviceId, {
-            [`switch_${switchNumber}`]: true
+    async createMockDevice(homeId: number, config: MockDeviceConfig): Promise<TuyaDevice> {
+        try {
+            console.log('Creando dispositivo mock:', config);
+
+            // Crear dispositivo mock personalizado localmente
+            const mockDevice: TuyaDevice = {
+                devId: `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                name: config.name,
+                iconUrl: this.getIconForDeviceType(config.type),
+                isOnline: config.online,
+                productId: `mock_product_${config.type}`,
+                supportedFunctions: config.features,
+                category: config.category,
+                productName: `Mock ${config.type}`,
+                isLocalOnline: config.online,
+                isSub: false,
+                isShare: false,
+                status: config.initialState || this.getDefaultStateForType(config.type)
+            };
+
+            this.localTestDevices.push(mockDevice);
+            console.log('Dispositivo mock creado localmente:', mockDevice);
+            return mockDevice;
+        } catch (error) {
+            console.error('Error creando dispositivo mock:', error);
+            throw error;
+        }
+    }
+
+
+    private isTestDevice(deviceId: string): boolean {
+        return deviceId.startsWith('test_') || deviceId.startsWith('mock_');
+    }
+
+    private async controlTestDevice(deviceId: string, commands: DeviceCommand): Promise<string> {
+        try {
+            console.log('Controlando dispositivo de prueba:', deviceId, commands);
+
+            // Control local de dispositivo de prueba
+            const deviceIndex = this.localTestDevices.findIndex(d => d.devId === deviceId);
+            if (deviceIndex === -1) {
+                throw new Error('Dispositivo de prueba no encontrado');
+            }
+
+            const device = this.localTestDevices[deviceIndex];
+            const newStatus = { ...device.status, ...commands };
+
+            // Aplicar efectos secundarios realistas
+            this.applyStateEffects(newStatus, commands, device.category || 'switch');
+
+            // Actualizar dispositivo
+            this.localTestDevices[deviceIndex] = {
+                ...device,
+                status: newStatus
+            };
+
+            console.log('Dispositivo de prueba controlado exitosamente');
+            return 'Control de dispositivo de prueba exitoso';
+        } catch (error) {
+            console.error('Error controlando dispositivo de prueba:', error);
+            throw error;
+        }
+    }
+
+    private createLocalMockDevice(name: string, type: string): TuyaDevice {
+        const deviceId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const baseDevice: TuyaDevice = {
+            devId: deviceId,
+            name: name,
+            iconUrl: this.getIconForDeviceType(type),
+            isOnline: true,
+            productId: `test_${type}`,
+            supportedFunctions: this.getFunctionsForType(type),
+            category: type,
+            productName: `Test ${type}`,
+            isLocalOnline: true,
+            isSub: false,
+            isShare: false,
+            status: this.getDefaultStateForType(type)
+        };
+
+        return baseDevice;
+    }
+
+    private getIconForDeviceType(type: string): string {
+        const icons: { [key: string]: string } = {
+            'switch': 'https://images.tuyacn.com/smart/icon/switch.png',
+            'light': 'https://images.tuyacn.com/smart/icon/light.png',
+            'sensor': 'https://images.tuyacn.com/smart/icon/sensor.png',
+            'plug': 'https://images.tuyacn.com/smart/icon/plug.png',
+            'fan': 'https://images.tuyacn.com/smart/icon/fan.png',
+            'thermostat': 'https://images.tuyacn.com/smart/icon/thermostat.png'
+        };
+        return icons[type] || icons['switch'];
+    }
+
+    private getFunctionsForType(type: string): string[] {
+        const functions: { [key: string]: string[] } = {
+            'switch': ['switch_1', 'switch_2', 'switch_3'],
+            'light': ['switch_1', 'bright_value', 'temp_value', 'colour_data'],
+            'sensor': ['temp_current', 'humidity_value', 'battery_percentage'],
+            'plug': ['switch_1', 'cur_power', 'cur_voltage'],
+            'fan': ['switch_1', 'fan_speed', 'mode'],
+            'thermostat': ['switch_1', 'temp_set', 'temp_current', 'mode']
+        };
+        return functions[type] || ['switch_1'];
+    }
+
+    private getDefaultStateForType(type: string): { [key: string]: any } {
+        const states: { [key: string]: { [key: string]: any } } = {
+            'switch': {
+                'switch_1': false,
+                'switch_2': false,
+                'switch_3': false
+            },
+            'light': {
+                'switch_1': false,
+                'bright_value': 255,
+                'temp_value': 500,
+                'work_mode': 'white'
+            },
+            'sensor': {
+                'temp_current': 22,
+                'humidity_value': 45,
+                'battery_percentage': 85
+            },
+            'plug': {
+                'switch_1': false,
+                'cur_power': 0,
+                'cur_voltage': 220
+            },
+            'fan': {
+                'switch_1': false,
+                'fan_speed': 1,
+                'mode': 'straight_wind'
+            },
+            'thermostat': {
+                'switch_1': false,
+                'temp_set': 23,
+                'temp_current': 22,
+                'mode': 'auto'
+            }
+        };
+        return states[type] || { 'switch_1': false };
+    }
+
+    private applyStateEffects(
+        status: { [key: string]: any },
+        commands: DeviceCommand,
+        deviceType: string
+    ): void {
+        Object.entries(commands).forEach(([key, value]) => {
+            switch (deviceType) {
+                case 'plug':
+                    if (key === 'switch_1') {
+                        if (!value) {
+                            status.cur_power = 0;
+                            status.cur_current = 0;
+                        } else {
+                            status.cur_power = Math.floor(Math.random() * 500) + 50;
+                            status.cur_current = status.cur_power / (status.cur_voltage || 220);
+                        }
+                    }
+                    break;
+
+                case 'light':
+                    if (key === 'work_mode') {
+                        if (value === 'colour') {
+                            status.temp_value = 0;
+                        }
+                    }
+                    break;
+
+                case 'fan':
+                    if (key === 'switch_1' && !value) {
+                        status.oscillation = false;
+                    }
+                    if (key === 'mode' && value === 'sleep_wind') {
+                        status.fan_speed = Math.min(status.fan_speed || 1, 2);
+                    }
+                    break;
+
+                case 'thermostat':
+                    if (key === 'temp_set') {
+                        const tempDiff = value - (status.temp_current || 20);
+                        status.temp_current = status.temp_current + (tempDiff * 0.1);
+                    }
+                    break;
+
+                case 'sensor':
+                    if (key === 'temp_current') {
+                        const tempChange = value - (status.temp_current || 20);
+                        status.humidity_value = Math.max(0, Math.min(100,
+                            (status.humidity_value || 50) - (tempChange * 2)
+                        ));
+                    }
+                    break;
+            }
         });
     }
 
-    async setSwitchState(deviceId: string, state: boolean, switchNumber: number = 1): Promise<string> {
+
+    async toggleSwitch(deviceId: string, switchNumber: number = 1): Promise<string> {
         return this.controlDevice(deviceId, {
-            [`switch_${switchNumber}`]: state
+            [`switch_${switchNumber}`]: true
         });
     }
 
@@ -528,14 +680,148 @@ class SmartLifeService {
         };
     }
 
+
+    isPairingInProgress(): boolean {
+        return this.pairingInProgress;
+    }
+
+    async createPresetTestDevices(homeId: number): Promise<TuyaDevice[]> {
+        const presets = [
+            {
+                name: 'Luz Sala Principal',
+                type: 'light' as const,
+                config: {
+                    name: 'Luz Sala Principal',
+                    type: 'light' as const,
+                    category: 'light',
+                    online: true,
+                    features: ['switch_1', 'bright_value', 'temp_value', 'work_mode'],
+                    initialState: { switch_1: true, bright_value: 200, work_mode: 'white' }
+                }
+            },
+            {
+                name: 'Switch Cocina',
+                type: 'switch' as const,
+                config: {
+                    name: 'Switch Cocina',
+                    type: 'switch' as const,
+                    category: 'switch',
+                    online: true,
+                    features: ['switch_1', 'switch_2', 'switch_3'],
+                    initialState: { switch_1: true, switch_2: false, switch_3: false }
+                }
+            },
+            {
+                name: 'Sensor Habitación',
+                type: 'sensor' as const,
+                config: {
+                    name: 'Sensor Habitación',
+                    type: 'sensor' as const,
+                    category: 'sensor',
+                    online: true,
+                    features: ['temp_current', 'humidity_value', 'battery_percentage'],
+                    initialState: { temp_current: 24, humidity_value: 42, battery_percentage: 78 }
+                }
+            },
+            {
+                name: 'Enchufe TV',
+                type: 'plug' as const,
+                config: {
+                    name: 'Enchufe TV',
+                    type: 'plug' as const,
+                    category: 'plug',
+                    online: true,
+                    features: ['switch_1', 'cur_power', 'cur_voltage'],
+                    initialState: { switch_1: true, cur_power: 85, cur_voltage: 220 }
+                }
+            }
+        ];
+
+        const createdDevices: TuyaDevice[] = [];
+
+        for (const preset of presets) {
+            try {
+                const device = await this.createMockDevice(homeId, preset.config);
+                createdDevices.push(device);
+                console.log(`Dispositivo preset creado: ${preset.name}`);
+            } catch (error) {
+                console.error(`Error creando dispositivo preset ${preset.name}:`, error);
+            }
+        }
+
+        return createdDevices;
+    }
+
+    getDeviceStats(): {
+        total: number;
+        online: number;
+        offline: number;
+        testDevices: number;
+        realDevices: number;
+    } {
+        const total = this.localTestDevices.length;
+        const online = this.localTestDevices.filter(d => d.isOnline).length;
+        const offline = total - online;
+        const testDevices = this.localTestDevices.length;
+        const realDevices = 0;
+
+        return {
+            total,
+            online,
+            offline,
+            testDevices,
+            realDevices
+        };
+    }
+
+    async clearTestDevices(): Promise<void> {
+        try {
+            this.localTestDevices = [];
+            console.log('Dispositivos de prueba eliminados');
+        } catch (error) {
+            console.error('Error limpiando dispositivos de prueba:', error);
+            throw error;
+        }
+    }
+
+    getDeviceById(deviceId: string): TuyaDevice | null {
+        return this.localTestDevices.find(device => device.devId === deviceId) || null;
+    }
+
+    async removeTestDevice(deviceId: string): Promise<string> {
+        try {
+            const index = this.localTestDevices.findIndex(device => device.devId === deviceId);
+            if (index === -1) {
+                throw new Error('Dispositivo de prueba no encontrado');
+            }
+
+            this.localTestDevices.splice(index, 1);
+            console.log('Dispositivo de prueba eliminado:', deviceId);
+            return 'Dispositivo de prueba eliminado exitosamente';
+        } catch (error) {
+            console.error('Error eliminando dispositivo de prueba:', error);
+            throw error;
+        }
+    }
+
     getInitializationStatus(): boolean {
         return this.isInitialized;
     }
 
     async destroy(): Promise<void> {
         try {
+            // Limpiar emparejamiento
+            if (this.pairingInProgress) {
+                await this.stopDevicePairing();
+            }
+
+            // Limpiar dispositivos de prueba
+            this.localTestDevices = [];
+
+            // Destruir SDK
             SmartLifeModule.destroy();
             this.isInitialized = false;
+
             console.log('Smart Life SDK destroyed');
         } catch (error) {
             console.error('Error destroying SDK:', error);

@@ -221,7 +221,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </Text>
                         </View>
 
-                        {/* Control Switch si está disponible */}
                         {hasSwitch && device.isOnline && (
                             <View style={styles.switchControl}>
                                 <Text style={styles.switchLabel}>
@@ -243,7 +242,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                     </View>
                 </View>
 
-                {/* Funciones soportadas (si existen) */}
                 {device.supportedFunctions && device.supportedFunctions.length > 0 && (
                     <View style={styles.functionsContainer}>
                         <Text style={styles.functionsTitle}>Funciones:</Text>

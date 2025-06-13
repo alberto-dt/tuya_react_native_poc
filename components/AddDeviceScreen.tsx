@@ -8,9 +8,12 @@ import {
     SafeAreaView,
     ScrollView,
     StatusBar,
-    Linking,
+    TextInput,
+    ActivityIndicator,
+    Switch,
 } from 'react-native';
 
+import SmartLifeService from '../services/SmartLifeService';
 import type { TuyaDevice, TuyaHome, TuyaUser } from '../services/SmartLifeService';
 
 interface AddDeviceScreenProps {
@@ -20,136 +23,254 @@ interface AddDeviceScreenProps {
     onCancel: () => void;
 }
 
+type AddDeviceMode = 'selection' | 'test_device';
+type TestDeviceType = 'switch' | 'light' | 'sensor' | 'plug' | 'fan' | 'thermostat';
+
 const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                                                              user,
                                                              home,
                                                              onDeviceAdded,
                                                              onCancel,
                                                          }) => {
-    const [step, setStep] = useState<'instructions' | 'waiting'>('instructions');
+    const [mode, setMode] = useState<AddDeviceMode>('selection');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const openSmartLifeApp = useCallback(() => {
-        const smartLifeUrl = 'smartlife://';
-        const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.tuya.smartlife';
+    const [testDeviceName, setTestDeviceName] = useState('');
+    const [testDeviceType, setTestDeviceType] = useState<TestDeviceType>('switch');
+    const [isTestDeviceOnline, setIsTestDeviceOnline] = useState(true);
 
-        Linking.canOpenURL(smartLifeUrl).then(supported => {
-            if (supported) {
-                Linking.openURL(smartLifeUrl);
-            } else {
-                Linking.openURL(playStoreUrl);
+    const addTestDevice = useCallback(async () => {
+        try {
+            if (!testDeviceName.trim()) {
+                Alert.alert('Error', 'Por favor ingresa un nombre para el dispositivo');
+                return;
             }
-        }).catch(err => {
-            console.error('Error opening Smart Life app:', err);
-            Linking.openURL(playStoreUrl);
-        });
-    }, []);
 
-    const handleRefreshDevices = useCallback(() => {
-        setStep('waiting');
+            setIsLoading(true);
 
-        setTimeout(() => {
+            console.log('Agregando dispositivo de prueba:', {
+                name: testDeviceName,
+                type: testDeviceType,
+                online: isTestDeviceOnline
+            });
+
+            // Usar el método addTestDevice del servicio refactorizado
+            const testDevice = await SmartLifeService.addTestDevice(
+                home.homeId,
+                testDeviceName,
+                testDeviceType
+            );
+
             Alert.alert(
-                'Actualización Completa',
-                'Si agregaste un dispositivo en la app Smart Life, debería aparecer en tu lista de dispositivos al regresar.',
+                '¡Dispositivo de Prueba Creado! 🧪',
+                `El dispositivo "${testDevice.name}" ha sido agregado a tu hogar para pruebas.`,
                 [
                     {
-                        text: 'Volver a Lista',
-                        onPress: onCancel
+                        text: 'OK',
+                        onPress: () => {
+                            onDeviceAdded(testDevice);
+                        }
                     }
                 ]
             );
-            setStep('instructions');
-        }, 2000);
-    }, [onCancel]);
 
-    const renderInstructions = () => (
+        } catch (error) {
+            console.error('Error agregando dispositivo de prueba:', error);
+            Alert.alert(
+                'Error',
+                `No se pudo crear el dispositivo de prueba:\n${(error as Error).message}`
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    }, [testDeviceName, testDeviceType, isTestDeviceOnline, home.homeId, onDeviceAdded]);
+
+    const createPresetDevices = useCallback(async () => {
+        try {
+            setIsLoading(true);
+
+            Alert.alert(
+                'Crear Dispositivos de Demostración',
+                '¿Quieres crear 4 dispositivos de prueba predefinidos para demostración?',
+                [
+                    { text: 'Cancelar', style: 'cancel' },
+                    {
+                        text: 'Crear',
+                        onPress: async () => {
+                            try {
+                                const devices = await SmartLifeService.createPresetTestDevices(home.homeId);
+
+                                Alert.alert(
+                                    '¡Dispositivos Creados! 🎉',
+                                    `Se crearon ${devices.length} dispositivos de demostración exitosamente.`,
+                                    [
+                                        {
+                                            text: 'Ver Dispositivos',
+                                            onPress: onCancel // Regresar a la lista para ver los dispositivos
+                                        }
+                                    ]
+                                );
+                            } catch (error) {
+                                Alert.alert('Error', `No se pudieron crear los dispositivos: ${(error as Error).message}`);
+                            }
+                        }
+                    }
+                ]
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    }, [home.homeId, onCancel]);
+    const renderModeSelection = () => (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.stepTitle}>📱 Agregar Dispositivo</Text>
+            <Text style={styles.stepTitle}>🧪 Agregar Dispositivos de Prueba</Text>
             <Text style={styles.stepDescription}>
-                Para agregar dispositivos a tu hogar "{home.name}", necesitas usar la app oficial Smart Life.
+                Elige cómo quieres agregar dispositivos virtuales a "{home.name}"
             </Text>
 
-            <View style={styles.warningCard}>
-                <Text style={styles.warningTitle}>⚠️ Función en Desarrollo</Text>
-                <Text style={styles.warningText}>
-                    El emparejamiento directo desde esta app está siendo implementado.
-                    Por ahora, usa la app oficial Smart Life para agregar dispositivos.
-                </Text>
-            </View>
-
-            <View style={styles.instructionsSection}>
-                <Text style={styles.instructionsTitle}>📋 Pasos para Agregar Dispositivo:</Text>
-                <Text style={styles.instructionsText}>
-                    1. 📲 Abre la app Smart Life (botón abajo)
-                    {'\n'}2. 🏠 Selecciona el hogar "{home.name}"
-                    {'\n'}3. ➕ Toca el botón "+" para agregar dispositivo
-                    {'\n'}4. 🔍 Sigue las instrucciones de emparejamiento
-                    {'\n'}5. ✅ Una vez agregado, regresa a esta app
-                    {'\n'}6. 🔄 Actualiza la lista de dispositivos
-                </Text>
-            </View>
-
-            <View style={styles.tipsSection}>
-                <Text style={styles.tipsTitle}>💡 Consejos Importantes:</Text>
-                <Text style={styles.tipsText}>
-                    • Asegúrate de estar conectado a WiFi de 2.4GHz
-                    {'\n'}• Pon el dispositivo en modo emparejamiento
-                    {'\n'}• Usa la misma cuenta en ambas apps
-                    {'\n'}• Mantén el dispositivo cerca del router
-                    {'\n'}• Verifica que el LED parpadee rápidamente
-                </Text>
-            </View>
-
             <TouchableOpacity
-                style={styles.smartLifeButton}
-                onPress={openSmartLifeApp}
+                style={[styles.optionCard, styles.testDeviceCard]}
+                onPress={() => setMode('test_device')}
             >
-                <Text style={styles.smartLifeButtonText}>
-                    📱 Abrir Smart Life App
-                </Text>
+                <Text style={styles.optionIcon}>🧪</Text>
+                <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Dispositivo Individual</Text>
+                    <Text style={styles.optionDescription}>
+                        Crear un dispositivo virtual personalizado para probar funcionalidades específicas
+                    </Text>
+                </View>
+                <Text style={styles.optionArrow}>→</Text>
             </TouchableOpacity>
 
+            {/* Opción Dispositivos de Demostración */}
             <TouchableOpacity
-                style={styles.refreshButton}
-                onPress={handleRefreshDevices}
+                style={[styles.optionCard, styles.demoCard]}
+                onPress={createPresetDevices}
+                disabled={isLoading}
             >
-                <Text style={styles.refreshButtonText}>
-                    🔄 Actualizar Lista de Dispositivos
-                </Text>
+                <Text style={styles.optionIcon}>⚡</Text>
+                <View style={styles.optionContent}>
+                    <Text style={styles.optionTitle}>Demo Completa</Text>
+                    <Text style={styles.optionDescription}>
+                        Crear automáticamente 4 dispositivos de prueba variados para demostración completa
+                    </Text>
+                </View>
+                {isLoading ? (
+                    <ActivityIndicator size="small" color="#9C27B0" />
+                ) : (
+                    <Text style={styles.optionArrow}>→</Text>
+                )}
             </TouchableOpacity>
-
-            <View style={styles.comingSoonSection}>
-                <Text style={styles.comingSoonTitle}>🚀 Próximamente:</Text>
-                <Text style={styles.comingSoonText}>
-                    • Emparejamiento directo en la app
-                    {'\n'}• Modo EZ y AP integrados
-                    {'\n'}• Detección automática de WiFi
-                    {'\n'}• Configuración avanzada de dispositivos
-                </Text>
-            </View>
         </ScrollView>
     );
 
-    const renderWaiting = () => (
-        <View style={styles.waitingContainer}>
-            <Text style={styles.waitingTitle}>🔄 Actualizando...</Text>
-            <Text style={styles.waitingText}>
-                Buscando nuevos dispositivos en tu hogar "{home.name}"
+    const renderTestDevice = () => (
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+            <Text style={styles.stepTitle}>🧪 Dispositivo de Prueba</Text>
+            <Text style={styles.stepDescription}>
+                Crear un dispositivo virtual para desarrollo y pruebas
             </Text>
-            <View style={styles.waitingAnimation}>
-                <Text style={styles.waitingDots}>⚡ ⚡ ⚡</Text>
+
+            <View style={styles.configSection}>
+                <Text style={styles.configTitle}>⚙️ Configuración</Text>
+
+                <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Nombre del Dispositivo:</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        value={testDeviceName}
+                        onChangeText={setTestDeviceName}
+                        placeholder="Mi Dispositivo de Prueba"
+                        autoCapitalize="words"
+                    />
+                </View>
+
+                <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Tipo de Dispositivo:</Text>
+                    <View style={styles.deviceTypeGrid}>
+                        {([
+                            { type: 'switch', icon: '🔌', name: 'Switch' },
+                            { type: 'light', icon: '💡', name: 'Luz' },
+                            { type: 'sensor', icon: '📡', name: 'Sensor' },
+                            { type: 'plug', icon: '🔌', name: 'Enchufe' },
+                            { type: 'fan', icon: '🌀', name: 'Ventilador' },
+                            { type: 'thermostat', icon: '🌡️', name: 'Termostato' }
+                        ] as Array<{ type: TestDeviceType; icon: string; name: string }>).map((device) => (
+                            <TouchableOpacity
+                                key={device.type}
+                                style={[
+                                    styles.deviceTypeButton,
+                                    testDeviceType === device.type && styles.deviceTypeButtonSelected
+                                ]}
+                                onPress={() => setTestDeviceType(device.type)}
+                            >
+                                <Text style={styles.deviceTypeIcon}>{device.icon}</Text>
+                                <Text style={[
+                                    styles.deviceTypeName,
+                                    testDeviceType === device.type && styles.deviceTypeNameSelected
+                                ]}>
+                                    {device.name}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                    <View style={styles.switchContainer}>
+                        <Text style={styles.inputLabel}>Estado Inicial Online:</Text>
+                        <Switch
+                            value={isTestDeviceOnline}
+                            onValueChange={setIsTestDeviceOnline}
+                            trackColor={{ false: '#ccc', true: '#4CAF50' }}
+                            thumbColor={isTestDeviceOnline ? '#2e7d32' : '#f4f3f4'}
+                        />
+                    </View>
+                </View>
             </View>
-        </View>
+
+            <View style={styles.infoCard}>
+                <Text style={styles.infoTitle}>ℹ️ Información</Text>
+                <Text style={styles.infoText}>
+                    Los dispositivos de prueba funcionan como dispositivos reales pero son virtuales.
+                    {'\n\n'}Perfecto para:
+                    {'\n'}• Probar la interfaz
+                    {'\n'}• Desarrollo de funcionalidades
+                    {'\n'}• Demonstraciones
+                </Text>
+            </View>
+
+            <TouchableOpacity
+                style={[styles.primaryButton, (!testDeviceName.trim() || isLoading) && styles.buttonDisabled]}
+                onPress={addTestDevice}
+                disabled={!testDeviceName.trim() || isLoading}
+            >
+                {isLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                ) : (
+                    <Text style={styles.primaryButtonText}>
+                        🧪 Crear Dispositivo de Prueba
+                    </Text>
+                )}
+            </TouchableOpacity>
+        </ScrollView>
     );
 
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#4CAF50" />
 
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={onCancel}
+                    onPress={() => {
+                        if (mode === 'selection') {
+                            onCancel();
+                        } else {
+                            setMode('selection');
+                        }
+                    }}
                 >
                     <Text style={styles.backButtonText}>←</Text>
                 </TouchableOpacity>
@@ -160,7 +281,9 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                 <View style={styles.headerPlaceholder} />
             </View>
 
-            {step === 'instructions' ? renderInstructions() : renderWaiting()}
+            {/* Content */}
+            {mode === 'selection' && renderModeSelection()}
+            {mode === 'test_device' && renderTestDevice()}
         </SafeAreaView>
     );
 };
@@ -226,47 +349,153 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
         lineHeight: 22,
-        marginBottom: 20,
+        marginBottom: 30,
     },
-    warningCard: {
-        backgroundColor: '#fff3e0',
-        borderRadius: 12,
+
+    // Option Cards
+    optionCard: {
+        backgroundColor: 'white',
+        borderRadius: 16,
         padding: 20,
-        marginBottom: 20,
-        borderLeftWidth: 4,
-        borderLeftColor: '#ff9800',
+        marginBottom: 15,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    warningTitle: {
+    testDeviceCard: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#9C27B0',
+    },
+    demoCard: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF9800',
+    },
+    optionIcon: {
+        fontSize: 32,
+        marginRight: 15,
+    },
+    optionContent: {
+        flex: 1,
+    },
+    optionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#f57c00',
-        marginBottom: 8,
+        color: '#333',
+        marginBottom: 5,
     },
-    warningText: {
+    optionDescription: {
         fontSize: 14,
-        color: '#ef6c00',
+        color: '#666',
         lineHeight: 20,
     },
-    instructionsSection: {
-        backgroundColor: '#e8f5e8',
+    optionArrow: {
+        fontSize: 24,
+        color: '#4CAF50',
+        fontWeight: 'bold',
+    },
+
+    // Buttons
+    primaryButton: {
+        backgroundColor: '#4CAF50',
+        borderRadius: 12,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    primaryButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    buttonDisabled: {
+        opacity: 0.6,
+    },
+
+    // Configuration
+    configSection: {
+        backgroundColor: 'white',
         borderRadius: 12,
         padding: 20,
         marginBottom: 20,
-        borderLeftWidth: 4,
-        borderLeftColor: '#4CAF50',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    instructionsTitle: {
+    configTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#2e7d32',
-        marginBottom: 12,
+        color: '#333',
+        marginBottom: 15,
     },
-    instructionsText: {
+    inputContainer: {
+        marginBottom: 15,
+    },
+    inputLabel: {
         fontSize: 14,
-        color: '#388e3c',
-        lineHeight: 22,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 8,
     },
-    tipsSection: {
+    textInput: {
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        color: '#333',
+    },
+
+    // Device Type Grid
+    deviceTypeGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+    },
+    deviceTypeButton: {
+        width: '48%',
+        backgroundColor: '#f8f9fa',
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+        borderRadius: 12,
+        padding: 15,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    deviceTypeButtonSelected: {
+        backgroundColor: '#e8f5e8',
+        borderColor: '#4CAF50',
+        borderWidth: 2,
+    },
+    deviceTypeIcon: {
+        fontSize: 28,
+        marginBottom: 8,
+    },
+    deviceTypeName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#666',
+    },
+    deviceTypeNameSelected: {
+        color: '#2e7d32',
+    },
+
+    // Switch Container
+    switchContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+
+    // Info Cards
+    infoCard: {
         backgroundColor: '#e3f2fd',
         borderRadius: 12,
         padding: 20,
@@ -274,97 +503,16 @@ const styles = StyleSheet.create({
         borderLeftWidth: 4,
         borderLeftColor: '#2196f3',
     },
-    tipsTitle: {
-        fontSize: 18,
+    infoTitle: {
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#1976d2',
-        marginBottom: 12,
+        marginBottom: 8,
     },
-    tipsText: {
+    infoText: {
         fontSize: 14,
         color: '#1565c0',
-        lineHeight: 22,
-    },
-    smartLifeButton: {
-        backgroundColor: '#FF6B35',
-        borderRadius: 12,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        marginBottom: 15,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    smartLifeButtonText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    refreshButton: {
-        backgroundColor: '#4CAF50',
-        borderRadius: 12,
-        paddingVertical: 14,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    refreshButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    comingSoonSection: {
-        backgroundColor: '#f3e5f5',
-        borderRadius: 12,
-        padding: 20,
-        marginBottom: 20,
-        borderLeftWidth: 4,
-        borderLeftColor: '#9c27b0',
-    },
-    comingSoonTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#7b1fa2',
-        marginBottom: 12,
-    },
-    comingSoonText: {
-        fontSize: 14,
-        color: '#8e24aa',
-        lineHeight: 22,
-    },
-    // Waiting styles
-    waitingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 40,
-    },
-    waitingTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-        textAlign: 'center',
-        marginBottom: 15,
-    },
-    waitingText: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 30,
-    },
-    waitingAnimation: {
-        alignItems: 'center',
-    },
-    waitingDots: {
-        fontSize: 32,
-        color: '#4CAF50',
+        lineHeight: 20,
     },
 });
 
