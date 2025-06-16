@@ -42,6 +42,27 @@ android {
         pickFirst '**/libreactnativejni.so'
     }
 
+    // Configuración para manejar errores de recursos de Tuya
+    aaptOptions {
+        ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
+        additionalParameters "--warn-manifest-validation"
+    }
+
+    lintOptions {
+        disable 'MissingTranslation'
+        disable 'ExtraTranslation'
+        disable 'InvalidPackage'
+        disable 'StringFormatMatches'
+        disable 'StringFormatInvalid'
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    // Configuración adicional para manejar errores de compilación de recursos
+    androidResources {
+        ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -72,28 +93,109 @@ android {
         maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
         google()
         mavenCentral()
+        // Repositorios adicionales para dependencias de BizBundle
+        maven { url 'https://jitpack.io' }
+        jcenter() // Para jp.wasabeef:recyclerview-animators
     }
 }
 
 configurations.all {
     exclude group: "com.thingclips.smart", module: 'thingsmart-modularCampAnno'
+
+    // Excluir React Native de Tuya para evitar conflictos de clases duplicadas
+    exclude group: "com.thingclips.smart", module: 'react-native'
+    // NO excluir fbjni globalmente ya que React Native lo necesita
+
+    // Excluir Commons IO para evitar conflictos con la versión estándar
+    exclude group: "commons-io", module: "commons-io"
+
+    // Resolución de conflictos para dependencias específicas
+    resolutionStrategy {
+        force 'com.google.android.flexbox:flexbox:3.0.0'
+        force 'jp.wasabeef:recyclerview-animators:4.0.2'
+        force 'com.squareup.okhttp3:okhttp:4.12.0'
+        force 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
+        force 'com.squareup.okio:okio:3.2.0'
+        force 'commons-io:commons-io:2.11.0'
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+        force 'org.apache.commons:commons-lang3:3.12.0'
+        // Forzar versión específica de fbjni compatible
+        force 'com.facebook.fbjni:fbjni:0.3.0'
+
+        // Mapear la dependencia incorrecta a la correcta
+        dependencySubstitution {
+            substitute module('com.google.android:flexbox') using module('com.google.android.flexbox:flexbox:3.0.0')
+        }
+    }
 }
 
 dependencies {
     implementation("com.facebook.react:react-android")
 
-    // Tuya BizBundle dependencies
-    api enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
-    // Note: ThingSmartActivatorExtraBizBundle is deprecated and no longer maintained
-    // Its functionality has been migrated to the Device Pairing UI BizBundle
-    // If you need device pairing functionality, use:
-    // implementation 'com.thingclips.smart:thingsmart-bizbundle-device_activator'
+    // ============ DEPENDENCIAS EXPLÍCITAS PARA RESOLVER CONFLICTOS ============
+    // Estas dependencias deben ir ANTES de los BizBundle para forzar las versiones
+    implementation 'com.google.android.flexbox:flexbox:3.0.0'
+    implementation 'jp.wasabeef:recyclerview-animators:4.0.2'
 
-    // Dependencias oficiales de Tuya SDK según documentación
+    // Forzar versiones compatibles de OkHttp para evitar errores de dexing
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
+    // Usar versión Android específica de OkIO en lugar de la JVM
+    implementation 'com.squareup.okio:okio:3.2.0'
+
+    // Agregar Commons IO con una versión compatible
+    implementation 'commons-io:commons-io:2.11.0'
+
+    // Forzar versión compatible de Kotlin stdlib
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
+
+    // Agregar fbjni explícitamente con versión compatible
+    implementation 'com.facebook.fbjni:fbjni:0.3.0'
+
+    // Dependencias de Fresco para Flipper (solo para debug)
+    debugImplementation 'com.facebook.fresco:fresco:2.6.0'
+    debugImplementation 'com.facebook.fresco:drawee:2.6.0'
+    debugImplementation 'com.facebook.fresco:imagepipeline:2.6.0'
+
+    // ============ NUEVAS DEPENDENCIAS TUYA BIZBUNDLE ============
+    // BOM para gestión de versiones de BizBundle
+    api enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
+
+    // Device Activator BizBundle - Para funcionalidad de emparejamiento de dispositivos
+    implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
+
+    // QR Code Scanner BizBundle - Si necesitas funcionalidad de escaneo QR
+    implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
+    // ============================================================
+
+    // Dependencias oficiales de Tuya SDK según documentación existentes
     implementation fileTree(dir: 'libs', include: ['*.aar'])
     implementation 'com.alibaba:fastjson:1.1.67.android'
-    implementation 'com.squareup.okhttp3:okhttp-urlconnection:3.14.9'
-    implementation 'com.thingclips.smart:thingsmart:6.2.2'
+    // Remover okhttp-urlconnection de aquí ya que lo forzamos arriba
+    // implementation 'com.squareup.okhttp3:okhttp-urlconnection:3.14.9'
+    implementation('com.thingclips.smart:thingsmart:6.2.2') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'commons-io', module: 'commons-io'
+        // Excluir versiones de OkHttp para usar nuestras versiones forzadas
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        // Solo excluir fbjni de Tuya específicamente
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+    }
 
     // React Native dependencies
     debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")

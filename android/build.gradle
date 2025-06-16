@@ -31,5 +31,13 @@ allprojects {
         // Tuya Maven repositories - Required for all Tuya dependencies
         maven { url 'https://maven-other.tuya.com/repository/maven-releases/' }
         maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
+
+        // Agregar jcenter para dependencias legacy
+        jcenter {
+            content {
+                // Solo permitir jp.wasabeef desde jcenter
+                includeModule("jp.wasabeef", "recyclerview-animators")
+            }
+        }
     }
 }
