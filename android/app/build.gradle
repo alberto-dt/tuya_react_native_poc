@@ -201,6 +201,19 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
+    // ============ DEPRECATED: ThingSmartActivatorExtraBizBundle ============
+    // IMPORTANTE: Este componente está DEPRECATED según la documentación oficial de Tuya
+    // Su funcionalidad ha sido migrada al servicio de emparejamiento de dispositivos
+    // Solo agregar si es absolutamente necesario para compatibilidad con código legacy
+    implementation('com.thingclips.smart:ThingSmartActivatorExtraBizBundle:5.0.0') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
+
     // ============ DEPENDENCIAS ADICIONALES TUYA BIZBUNDLE (OPCIONALES) ============
     // Uncomment these if you need additional BizBundle functionality:
 
