@@ -8,17 +8,41 @@ buildscript {
         targetSdkVersion = 34
         ndkVersion = "25.1.8937393"
         kotlinVersion = "1.8.10"
+
+        // Tuya BizBundle version - centralized management
+        tuyaBizBundleBomVersion = "6.2.16"
+        tuyaSDKVersion = "6.2.2"
     }
     repositories {
         google()
         mavenCentral()
-        // Tuya repositories for buildscript dependencies
-        maven { url 'https://maven-other.tuya.com/repository/maven-releases/' }
-        maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
+
+        // Tuya repositories for buildscript dependencies - MUST BE HERE
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-releases/'
+            name 'TuyaMavenReleases'
+        }
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-commercial-releases/'
+            name 'TuyaMavenCommercial'
+        }
+
+        // Additional repositories
+        maven { url 'https://jitpack.io' }
+
+        // JCenter for legacy dependencies (limited scope)
+        jcenter {
+            content {
+                includeModule("jp.wasabeef", "recyclerview-animators")
+            }
+        }
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
+        classpath("com.android.tools.build:gradle:8.1.0")
         classpath("com.facebook.react:react-native-gradle-plugin")
+
+        // If you need any Tuya-specific build plugins, add them here
+        // classpath("com.thingclips.smart:thingsmart-gradle-plugin:1.0.0")
     }
 }
 
@@ -26,18 +50,69 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://www.jitpack.io' }
 
         // Tuya Maven repositories - Required for all Tuya dependencies
-        maven { url 'https://maven-other.tuya.com/repository/maven-releases/' }
-        maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
+        // IMPORTANT: These must be declared in the correct order
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-releases/'
+            name 'TuyaMavenReleases'
+        }
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-commercial-releases/'
+            name 'TuyaMavenCommercial'
+        }
 
-        // Agregar jcenter para dependencias legacy
+        // Additional repositories
+        maven { url 'https://jitpack.io' }
+
+        // JCenter for legacy dependencies (limited scope)
         jcenter {
             content {
                 // Solo permitir jp.wasabeef desde jcenter
                 includeModule("jp.wasabeef", "recyclerview-animators")
             }
         }
+
+        // Local repository for any .aar files
+        flatDir {
+            dirs 'libs'
+        }
     }
+
+    // Global configurations for all modules
+    configurations.all {
+        // Global resolution strategy
+        resolutionStrategy {
+            // Force specific versions to avoid conflicts
+            force "org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}"
+            force 'androidx.core:core:1.8.0'
+            force 'androidx.fragment:fragment:1.5.0'
+            force 'androidx.appcompat:appcompat:1.5.0'
+            force 'com.google.android.material:material:1.6.1'
+
+            // OkHttp family
+            force 'com.squareup.okhttp3:okhttp:4.12.0'
+            force 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
+            force 'com.squareup.okio:okio:3.2.0'
+
+            // Other common libraries
+            force 'com.google.android.flexbox:flexbox:3.0.0'
+            force 'jp.wasabeef:recyclerview-animators:4.0.2'
+            force 'commons-io:commons-io:2.11.0'
+            force 'org.apache.commons:commons-lang3:3.12.0'
+            force 'com.facebook.fbjni:fbjni:0.3.0'
+        }
+    }
+}
+
+// Global gradle options
+gradle.projectsEvaluated {
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+    }
+}
+
+// Clean task
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }
