@@ -95,14 +95,31 @@ android {
         flatDir {
             dirs 'libs'
         }
-        // Tuya Maven repositories - Required for BizBundle dependencies
-        maven { url 'https://maven-other.tuya.com/repository/maven-releases/' }
-        maven { url 'https://maven-other.tuya.com/repository/maven-commercial-releases/' }
+
+        // Tuya repositories - Required for BizBundle dependencies
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-releases/'
+            name 'TuyaMavenReleases'
+        }
+        maven {
+            url 'https://maven-other.tuya.com/repository/maven-commercial-releases/'
+            name 'TuyaMavenCommercial'
+        }
+
+        // Standard repositories
         google()
         mavenCentral()
-        // Repositorios adicionales para dependencias de BizBundle
+
+        // Additional repositories
         maven { url 'https://jitpack.io' }
-        jcenter() // Para jp.wasabeef:recyclerview-animators
+
+        // JCenter for ImmersionBar and other legacy dependencies
+        jcenter {
+            content {
+                includeModule("jp.wasabeef", "recyclerview-animators")
+                includeModule("com.geyifeng.immersionbar", "immersionbar")
+            }
+        }
     }
 }
 
@@ -126,6 +143,7 @@ configurations.all {
         force 'commons-io:commons-io:2.11.0'
         force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
         force 'org.apache.commons:commons-lang3:3.12.0'
+
         // Forzar versión específica de fbjni compatible
         force 'com.facebook.fbjni:fbjni:0.3.0'
 
@@ -134,6 +152,13 @@ configurations.all {
         force 'androidx.fragment:fragment:1.5.0'
         force 'androidx.appcompat:appcompat:1.5.0'
         force 'com.google.android.material:material:1.6.1'
+
+        // Force ExoPlayer to a compatible version
+        force 'com.google.android.exoplayer:exoplayer-core:2.18.7'
+        force 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
+
+        // ImmersionBar (using official version)
+        force 'com.geyifeng.immersionbar:immersionbar:3.2.2'
 
         // Mapear la dependencia incorrecta a la correcta
         dependencySubstitution {
@@ -147,7 +172,7 @@ dependencies {
 
     // ============ TUYA BIZBUNDLE BOM - MUST BE FIRST ============
     // BOM para gestión de versiones de BizBundle - ESTA DEBE SER LA PRIMERA DEPENDENCIA
-    api enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
+    implementation enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
 
     // ============ DEPENDENCIAS EXPLÍCITAS PARA RESOLVER CONFLICTOS ============
     // Estas dependencias deben ir DESPUÉS del BOM pero ANTES de los BizBundle específicos
@@ -175,13 +200,21 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.5.0'
     implementation 'com.google.android.material:material:1.6.1'
 
+    // ============ DEPENDENCIAS ESPECÍFICAS PARA PANEL BIZBUNDLE ============
+    // ExoPlayer dependencies (requeridas por panel)
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.18.7'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
+
+    // ImmersionBar (usando la dependencia oficial correcta)
+    implementation 'com.geyifeng.immersionbar:immersionbar:3.2.2'
+
     // Dependencias de Fresco para Flipper (solo para debug)
     debugImplementation 'com.facebook.fresco:fresco:2.6.0'
     debugImplementation 'com.facebook.fresco:drawee:2.6.0'
     debugImplementation 'com.facebook.fresco:imagepipeline:2.6.0'
 
-    // ============ TUYA BIZBUNDLE DEPENDENCIES ============
-    // Device Activator BizBundle - Para funcionalidad de emparejamiento de dispositivos
+    // ============ TUYA BIZBUNDLE DEPENDENCIES - SEGÚN DOCUMENTACIÓN OFICIAL ============
+    // Device Activator BizBundle - Para funcionalidad de emparejamiento de dispositivos (OFICIAL)
     implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
@@ -191,7 +224,7 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // QR Code Scanner BizBundle - Para funcionalidad de escaneo QR
+    // QR Code Scanner BizBundle - Para funcionalidad de escaneo QR (OFICIAL)
     implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
@@ -201,11 +234,23 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // ============ DEPRECATED: ThingSmartActivatorExtraBizBundle ============
-    // IMPORTANTE: Este componente está DEPRECATED según la documentación oficial de Tuya
-    // Su funcionalidad ha sido migrada al servicio de emparejamiento de dispositivos
-    // Solo agregar si es absolutamente necesario para compatibilidad con código legacy
-    implementation('com.thingclips.smart:ThingSmartActivatorExtraBizBundle:5.0.0') {
+    // ============ DEPENDENCIAS REQUERIDAS PARA PANEL COMPLETO ============
+    // Panel BizBundle - Para UI de control de dispositivos
+    implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        // Excluir dependencias problemáticas específicas del panel
+        exclude group: 'com.tencent.tauth', module: 'qqopensdk'
+        exclude group: 'com.huawei.hms', module: 'base'
+        exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
+    }
+
+    // BaseKit BizBundle - Capacidades básicas extendidas (OBLIGATORIO)
+    implementation('com.thingclips.smart:thingsmart-bizbundle-basekit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
@@ -214,38 +259,25 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // ============ DEPENDENCIAS ADICIONALES TUYA BIZBUNDLE (OPCIONALES) ============
-    // Uncomment these if you need additional BizBundle functionality:
+    // BizKit BizBundle - Capacidades de negocio extendidas (OBLIGATORIO)
+    implementation('com.thingclips.smart:thingsmart-bizbundle-bizkit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
 
-    // Device Detail BizBundle - Para mostrar detalles de dispositivos
-    // implementation('com.thingclips.smart:thingsmart-bizbundle-device_detail') {
-    //     exclude group: 'com.thingclips.smart', module: 'react-native'
-    //     exclude group: 'com.facebook.fbjni', module: 'fbjni'
-    //     exclude group: 'commons-io', module: 'commons-io'
-    //     exclude group: 'com.squareup.okhttp3'
-    //     exclude group: 'com.squareup.okio'
-    //     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-    // }
-
-    // Scene BizBundle - Para manejo de escenas/automatizaciones
-    // implementation('com.thingclips.smart:thingsmart-bizbundle-scene') {
-    //     exclude group: 'com.thingclips.smart', module: 'react-native'
-    //     exclude group: 'com.facebook.fbjni', module: 'fbjni'
-    //     exclude group: 'commons-io', module: 'commons-io'
-    //     exclude group: 'com.squareup.okhttp3'
-    //     exclude group: 'com.squareup.okio'
-    //     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-    // }
-
-    // Family BizBundle - Para manejo de familia/usuarios
-    // implementation('com.thingclips.smart:thingsmart-bizbundle-family') {
-    //     exclude group: 'com.thingclips.smart', module: 'react-native'
-    //     exclude group: 'com.facebook.fbjni', module: 'fbjni'
-    //     exclude group: 'commons-io', module: 'commons-io'
-    //     exclude group: 'com.squareup.okhttp3'
-    //     exclude group: 'com.squareup.okio'
-    //     exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-    // }
+    // DeviceKit BizBundle - Capacidades de control de dispositivos (OBLIGATORIO)
+    implementation('com.thingclips.smart:thingsmart-bizbundle-devicekit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
 
     // ============================================================
 
@@ -253,6 +285,7 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.aar'])
     implementation 'com.alibaba:fastjson:1.1.67.android'
 
+    // Tuya Smart SDK - versión especificada en documentación oficial
     implementation('com.thingclips.smart:thingsmart:6.2.2') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'commons-io', module: 'commons-io'

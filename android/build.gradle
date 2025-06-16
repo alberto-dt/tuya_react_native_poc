@@ -27,13 +27,28 @@ buildscript {
             name 'TuyaMavenCommercial'
         }
 
+        // Huawei HMS Core repository
+        maven {
+            url 'https://developer.huawei.com/repo/'
+            name 'HuaweiDeveloper'
+        }
+
         // Additional repositories
         maven { url 'https://jitpack.io' }
 
-        // JCenter for legacy dependencies (limited scope)
+        // JCenter for ImmersionBar and other legacy dependencies
         jcenter {
             content {
                 includeModule("jp.wasabeef", "recyclerview-animators")
+                includeModule("com.geyifeng.immersionbar", "immersionbar")
+            }
+        }
+
+        // JCenter for ImmersionBar and other legacy dependencies
+        jcenter {
+            content {
+                includeModule("jp.wasabeef", "recyclerview-animators")
+                includeModule("com.geyifeng.immersionbar", "immersionbar")
             }
         }
     }
@@ -62,16 +77,14 @@ allprojects {
             name 'TuyaMavenCommercial'
         }
 
+        // Huawei HMS Core repository for HMS dependencies
+        maven {
+            url 'https://developer.huawei.com/repo/'
+            name 'HuaweiDeveloper'
+        }
+
         // Additional repositories
         maven { url 'https://jitpack.io' }
-
-        // JCenter for legacy dependencies (limited scope)
-        jcenter {
-            content {
-                // Solo permitir jp.wasabeef desde jcenter
-                includeModule("jp.wasabeef", "recyclerview-animators")
-            }
-        }
 
         // Local repository for any .aar files
         flatDir {
@@ -95,12 +108,25 @@ allprojects {
             force 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
             force 'com.squareup.okio:okio:3.2.0'
 
+            // ExoPlayer family - compatible versions
+            force 'com.google.android.exoplayer:exoplayer-core:2.18.7'
+            force 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
+            force 'com.google.android.exoplayer:exoplayer-dash:2.18.7'
+            force 'com.google.android.exoplayer:exoplayer-hls:2.18.7'
+            force 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.18.7'
+
+            // HMS Core
+            force 'com.huawei.hms:base:6.12.0.300'
+
             // Other common libraries
             force 'com.google.android.flexbox:flexbox:3.0.0'
             force 'jp.wasabeef:recyclerview-animators:4.0.2'
             force 'commons-io:commons-io:2.11.0'
             force 'org.apache.commons:commons-lang3:3.12.0'
             force 'com.facebook.fbjni:fbjni:0.3.0'
+
+            // ImmersionBar (using official version)
+            force 'com.geyifeng.immersionbar:immersionbar:3.2.2'
         }
     }
 }

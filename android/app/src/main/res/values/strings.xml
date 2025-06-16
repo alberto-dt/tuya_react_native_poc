@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">SmartLifeAppPOC</string>
+    <!-- Configuración Tuya Device Activator -->
+    <string name="ap_mode_ssid">SmartLife</string>
 </resources>
