@@ -5,18 +5,19 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
-platform :ios, min_ios_version_supported
+# Fuentes de CocoaPods
+source 'https://github.com/CocoaPods/Specs.git'
+source 'https://github.com/TuyaInc/TuyaPublicSpecs.git'
+source 'https://github.com/tuya/tuya-pod-specs.git'
+
+platform :ios, '12.4'
 prepare_react_native_project!
+
 
 # If you are using a `react-native-flipper` your iOS build will fail when `NO_FLIPPER=1` is set.
 # because `react-native-flipper` depends on (FlipperKit,...) that will be excluded
 #
 # To fix this you can also exclude `react-native-flipper` using a `react-native.config.js`
-# ```js
-# module.exports = {
-#   dependencies: {
-#     ...(process.env.NO_FLIPPER ? { 'react-native-flipper': { platforms: { ios: null } } } : {}),
-# ```
 flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
 
 linkage = ENV['USE_FRAMEWORKS']
@@ -25,6 +26,7 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
+# Reemplaza 'SmartLifeApp' con el nombre de tu target
 target 'SmartLifeApp' do
   config = use_native_modules!
 
@@ -45,18 +47,45 @@ target 'SmartLifeApp' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
+  # Tuya Smart Home SDK
+  pod 'ThingSmartHomeKit','~> 6.2.0'
+
+  # Construir y obtener ThingSmartCryption desde la plataforma IoT de Tuya
+  # Asegúrate de que la carpeta ios_core_sdk esté en el directorio raíz del proyecto iOS
+  pod 'ThingSmartCryption', :path => './ios_core_sdk'
+
+  # SDK de extensión de negocio (recomendado)
+  # pod 'ThingSmartBusinessExtensionKit'
+
   target 'SmartLifeAppTests' do
     inherit! :complete
     # Pods for testing
   end
 
   post_install do |installer|
-    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    # React Native post install
     react_native_post_install(
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
     __apply_Xcode_12_5_M1_post_install_workaround(installer)
+
+    # Configuración para Tuya SDK
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Deployment target compatible con React Native 0.72
+        config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "12.4"
+
+        # Excluir arm64 para simulador (si tienes problemas de compilación)
+        config.build_settings["EXCLUDED_ARCHS[sdk=iphonesimulator*]"] = "arm64"
+
+        # Reemplaza 'YOUR_TEAM_ID' con tu Team ID de Apple Developer
+        config.build_settings["DEVELOPMENT_TEAM"] = "YOUR_TEAM_ID"
+
+        # Configuraciones adicionales para React Native 0.72
+        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      end
+    end
   end
 end
