@@ -14,16 +14,21 @@ android {
     namespace "com.smartlifeapppoc"
     defaultConfig {
         applicationId "com.smartlifeapppoc"
-        minSdkVersion 23  // Updated from 21 to 23 for Tuya SDK compatibility
+        minSdkVersion 23
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
 
-        // Configuración oficial de Tuya SDK Documentacion
         multiDexEnabled true
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
+
+        manifestPlaceholders = [
+                TUYA_SMART_APPKEY: "phrvfs7yuqg3rg8sw3km",
+                TUYA_SMART_SECRET: "74akfvfua53teq4wvepcd847panjpkee",
+                CLEARTEXT_PERMITTED: "true"
+        ]
     }
 
     buildFeatures {
@@ -35,12 +40,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Configuración oficial de empaquetado según Tuya Documentacion
     packagingOptions {
         pickFirst 'lib/*/libc++_shared.so'
         pickFirst '**/libjsc.so'
         pickFirst '**/libreactnativejni.so'
-        // Additional packaging options for BizBundle
         pickFirst 'META-INF/DEPENDENCIES'
         pickFirst 'META-INF/LICENSE'
         pickFirst 'META-INF/LICENSE.txt'
@@ -49,7 +52,6 @@ android {
         pickFirst 'META-INF/services/javax.annotation.processing.Processor'
     }
 
-    // Configuración para manejar errores de recursos de Tuya
     aaptOptions {
         ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
         additionalParameters "--warn-manifest-validation"
@@ -65,7 +67,6 @@ android {
         abortOnError false
     }
 
-    // Configuración adicional para manejar errores de compilación de recursos
     androidResources {
         ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
     }
@@ -90,13 +91,11 @@ android {
         }
     }
 
-    // Para usar archivos .aar locales DOcumetnacion
     repositories {
         flatDir {
             dirs 'libs'
         }
 
-        // Tuya repositories - Required for BizBundle dependencies
         maven {
             url 'https://maven-other.tuya.com/repository/maven-releases/'
             name 'TuyaMavenReleases'
@@ -106,14 +105,11 @@ android {
             name 'TuyaMavenCommercial'
         }
 
-        // Standard repositories
         google()
         mavenCentral()
 
-        // Additional repositories
         maven { url 'https://jitpack.io' }
 
-        // JCenter for ImmersionBar and other legacy dependencies
         jcenter {
             content {
                 includeModule("jp.wasabeef", "recyclerview-animators")
@@ -125,15 +121,9 @@ android {
 
 configurations.all {
     exclude group: "com.thingclips.smart", module: 'thingsmart-modularCampAnno'
-
-    // Excluir React Native de Tuya para evitar conflictos de clases duplicadas
     exclude group: "com.thingclips.smart", module: 'react-native'
-    // NO excluir fbjni globalmente ya que React Native lo necesita
-
-    // Excluir Commons IO para evitar conflictos con la versión estándar
     exclude group: "commons-io", module: "commons-io"
 
-    // Resolución de conflictos para dependencias específicas
     resolutionStrategy {
         force 'com.google.android.flexbox:flexbox:3.0.0'
         force 'jp.wasabeef:recyclerview-animators:4.0.2'
@@ -144,23 +134,18 @@ configurations.all {
         force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
         force 'org.apache.commons:commons-lang3:3.12.0'
 
-        // Forzar versión específica de fbjni compatible
         force 'com.facebook.fbjni:fbjni:0.3.0'
 
-        // Additional force resolutions for BizBundle compatibility
         force 'androidx.core:core:1.8.0'
         force 'androidx.fragment:fragment:1.5.0'
         force 'androidx.appcompat:appcompat:1.5.0'
         force 'com.google.android.material:material:1.6.1'
 
-        // Force ExoPlayer to a compatible version
         force 'com.google.android.exoplayer:exoplayer-core:2.18.7'
         force 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
 
-        // ImmersionBar (using official version)
         force 'com.geyifeng.immersionbar:immersionbar:3.2.2'
 
-        // Mapear la dependencia incorrecta a la correcta
         dependencySubstitution {
             substitute module('com.google.android:flexbox') using module('com.google.android.flexbox:flexbox:3.0.0')
         }
@@ -170,86 +155,41 @@ configurations.all {
 dependencies {
     implementation("com.facebook.react:react-android")
 
-    // ============ TUYA BIZBUNDLE BOM - MUST BE FIRST ============
-    // BOM para gestión de versiones de BizBundle - ESTA DEBE SER LA PRIMERA DEPENDENCIA
     implementation enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
 
-    // ============ DEPENDENCIAS EXPLÍCITAS PARA RESOLVER CONFLICTOS ============
-    // Estas dependencias deben ir DESPUÉS del BOM pero ANTES de los BizBundle específicos
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
     implementation 'jp.wasabeef:recyclerview-animators:4.0.2'
 
-    // Forzar versiones compatibles de OkHttp para evitar errores de dexing
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
-    // Usar versión Android específica de OkIO en lugar de la JVM
     implementation 'com.squareup.okio:okio:3.2.0'
 
-    // Agregar Commons IO con una versión compatible
     implementation 'commons-io:commons-io:2.11.0'
-
-    // Forzar versión compatible de Kotlin stdlib
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
-
-    // Agregar fbjni explícitamente con versión compatible
     implementation 'com.facebook.fbjni:fbjni:0.3.0'
 
-    // AndroidX dependencies that BizBundle might need
     implementation 'androidx.core:core:1.8.0'
     implementation 'androidx.fragment:fragment:1.5.0'
     implementation 'androidx.appcompat:appcompat:1.5.0'
     implementation 'com.google.android.material:material:1.6.1'
 
-    // ============ DEPENDENCIAS ESPECÍFICAS PARA PANEL BIZBUNDLE ============
-    // ExoPlayer dependencies (requeridas por panel)
     implementation 'com.google.android.exoplayer:exoplayer-core:2.18.7'
     implementation 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
 
-    // ImmersionBar (usando la dependencia oficial correcta)
     implementation 'com.geyifeng.immersionbar:immersionbar:3.2.2'
 
-    // Dependencias de Fresco para Flipper (solo para debug)
     debugImplementation 'com.facebook.fresco:fresco:2.6.0'
     debugImplementation 'com.facebook.fresco:drawee:2.6.0'
     debugImplementation 'com.facebook.fresco:imagepipeline:2.6.0'
 
-    // ============ TUYA BIZBUNDLE DEPENDENCIES - SEGÚN DOCUMENTACIÓN OFICIAL ============
-    // Device Activator BizBundle - Para funcionalidad de emparejamiento de dispositivos (OFICIAL)
-    implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
+    implementation('com.thingclips.smart:thingsmart:6.2.2') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-    }
-
-    // QR Code Scanner BizBundle - Para funcionalidad de escaneo QR (OFICIAL)
-    implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // ============ DEPENDENCIAS REQUERIDAS PARA PANEL COMPLETO ============
-    // Panel BizBundle - Para UI de control de dispositivos
-    implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        // Excluir dependencias problemáticas específicas del panel
-        exclude group: 'com.tencent.tauth', module: 'qqopensdk'
-        exclude group: 'com.huawei.hms', module: 'base'
-        exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
-    }
-
-    // BaseKit BizBundle - Capacidades básicas extendidas (OBLIGATORIO)
     implementation('com.thingclips.smart:thingsmart-bizbundle-basekit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
@@ -259,7 +199,6 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // BizKit BizBundle - Capacidades de negocio extendidas (OBLIGATORIO)
     implementation('com.thingclips.smart:thingsmart-bizbundle-bizkit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
@@ -269,7 +208,6 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // DeviceKit BizBundle - Capacidades de control de dispositivos (OBLIGATORIO)
     implementation('com.thingclips.smart:thingsmart-bizbundle-devicekit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
@@ -279,30 +217,45 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
     }
 
-    // ============================================================
+    implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
 
-    // Dependencias oficiales de Tuya SDK según documentación existentes
+    implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    }
+
+    implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.tencent.tauth', module: 'qqopensdk'
+        exclude group: 'com.huawei.hms', module: 'base'
+        exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
+    }
+
     implementation fileTree(dir: 'libs', include: ['*.aar'])
     implementation 'com.alibaba:fastjson:1.1.67.android'
 
-    // Tuya Smart SDK - versión especificada en documentación oficial
-    implementation('com.thingclips.smart:thingsmart:6.2.2') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'commons-io', module: 'commons-io'
-        // Excluir versiones de OkHttp para usar nuestras versiones forzadas
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        // Solo excluir fbjni de Tuya específicamente
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-    }
-
-    // React Native dependencies
     debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")
     debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
         exclude group:'com.squareup.okhttp3', module:'okhttp'
     }
-
     debugImplementation("com.facebook.flipper:flipper-fresco-plugin:${FLIPPER_VERSION}")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

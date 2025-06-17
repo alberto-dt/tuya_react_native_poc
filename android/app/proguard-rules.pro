@@ -1,7 +1,3 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-
 # Reglas oficiales de Tuya SDK
 #fastJson
 -keep class com.alibaba.fastjson.**{*;}

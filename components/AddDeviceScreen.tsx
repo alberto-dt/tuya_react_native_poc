@@ -16,7 +16,9 @@ import {
 } from 'react-native';
 
 import SmartLifeService from '../services/SmartLifeService';
-import type { TuyaDevice, TuyaHome, TuyaUser } from '../services/SmartLifeService';
+import type { TuyaDevice, TuyaHome, TuyaUser, PairingValidationResult, PairingResult } from '@/services/SmartLifeService';
+import PairingProgressModal from '../components/PairingProgressModal';
+import WiFiValidator from '../components/WifiValidator';
 
 interface AddDeviceScreenProps {
     user: TuyaUser;
@@ -25,7 +27,7 @@ interface AddDeviceScreenProps {
     onCancel: () => void;
 }
 
-type AddDeviceMode = 'selection' | 'test_device' | 'real_device_ez' | 'real_device_ap';
+type AddDeviceMode = 'selection' | 'test_device' | 'real_device_smart';
 type TestDeviceType = 'switch' | 'light' | 'sensor' | 'plug' | 'fan' | 'thermostat';
 
 const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
@@ -38,17 +40,22 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [isPairing, setIsPairing] = useState(false);
     const [pairingProgress, setPairingProgress] = useState('');
+    const [currentPairingMode, setCurrentPairingMode] = useState<'EZ' | 'AP' | 'AUTO' | 'SMART' | null>(null);
 
-    // Test device states
     const [testDeviceName, setTestDeviceName] = useState('');
     const [testDeviceType, setTestDeviceType] = useState<TestDeviceType>('switch');
     const [isTestDeviceOnline, setIsTestDeviceOnline] = useState(true);
 
-    // Real device pairing states
     const [wifiSSID, setWifiSSID] = useState('');
     const [wifiPassword, setWifiPassword] = useState('');
     const [currentSSID, setCurrentSSID] = useState('');
     const [pairingTimeout, setPairingTimeout] = useState(120);
+
+    const [isWifiValid, setIsWifiValid] = useState(false);
+    const [wifiErrors, setWifiErrors] = useState<string[]>([]);
+    const [wifiWarnings, setWifiWarnings] = useState<string[]>([]);
+
+    const [lastValidation, setLastValidation] = useState<PairingValidationResult | null>(null);
 
     useEffect(() => {
         getCurrentWiFiSSID();
@@ -85,6 +92,316 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
             }
         }
         return true;
+    }, []);
+
+    const handleWiFiValidationChange = useCallback((isValid: boolean, errors: string[], warnings: string[]) => {
+        setIsWifiValid(isValid);
+        setWifiErrors(errors);
+        setWifiWarnings(warnings);
+    }, []);
+
+    const startRealDevicePairing = useCallback(async (pairingMode: 'EZ' | 'AP') => {
+        try {
+            if (!wifiSSID.trim()) {
+                Alert.alert('Error', 'Por favor ingresa el nombre de tu red WiFi');
+                return;
+            }
+
+            if (!wifiPassword.trim()) {
+                Alert.alert('Error', 'Por favor ingresa la contraseña de tu WiFi');
+                return;
+            }
+
+            if (!isWifiValid && wifiErrors.length > 0) {
+                Alert.alert(
+                    'Configuración WiFi Inválida',
+                    `Se encontraron problemas críticos:\n\n${wifiErrors.join('\n')}\n\nPor favor corrige estos problemas antes de continuar.`
+                );
+                return;
+            }
+
+            if (wifiWarnings.length > 0) {
+                const shouldContinue = await new Promise<boolean>((resolve) => {
+                    Alert.alert(
+                        'Advertencias de WiFi',
+                        `Se detectaron advertencias:\n\n${wifiWarnings.join('\n')}\n\n¿Quieres continuar de todos modos?`,
+                        [
+                            { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+                            { text: 'Continuar', onPress: () => resolve(true) }
+                        ]
+                    );
+                });
+
+                if (!shouldContinue) return;
+            }
+
+            const hasPermission = await requestLocationPermission();
+            if (!hasPermission) {
+                Alert.alert(
+                    'Permiso Requerido',
+                    'El permiso de ubicación es necesario para el emparejamiento de dispositivos.'
+                );
+                return;
+            }
+
+            setIsPairing(true);
+            setCurrentPairingMode(pairingMode);
+            setPairingProgress('Validando condiciones de emparejamiento...');
+
+            console.log(`Starting ENHANCED ${pairingMode} mode pairing:`, {
+                homeId: home.homeId,
+                ssid: wifiSSID.substring(0, 8) + '...',
+                passwordLength: wifiPassword.length,
+                timeout: pairingTimeout
+            });
+
+            try {
+                let pairedDevice: TuyaDevice;
+
+                if (pairingMode === 'EZ') {
+                    setPairingProgress('Iniciando modo EZ optimizado...');
+                    pairedDevice = await SmartLifeService.startDevicePairingEZ(
+                        home.homeId,
+                        wifiSSID,
+                        wifiPassword,
+                        pairingTimeout
+                    );
+                } else {
+                    setPairingProgress('Iniciando modo AP optimizado...');
+                    pairedDevice = await SmartLifeService.startDevicePairingAP(
+                        home.homeId,
+                        wifiSSID,
+                        wifiPassword,
+                        pairingTimeout
+                    );
+                }
+
+                Alert.alert(
+                    '¡Dispositivo Emparejado! 🎉',
+                    `El dispositivo "${pairedDevice.name}" ha sido emparejado exitosamente usando modo ${pairingMode}.\n\n` +
+                    `• ID: ${pairedDevice.devId}\n` +
+                    `• Estado: ${pairedDevice.isOnline ? 'En línea ✅' : 'Desconectado ❌'}\n` +
+                    `• Funciones: ${pairedDevice.supportedFunctions?.length || 0}\n\n` +
+                    `El dispositivo ya está disponible en tu hogar.`,
+                    [
+                        {
+                            text: 'Ver Dispositivo',
+                            onPress: () => {
+                                onDeviceAdded(pairedDevice);
+                            }
+                        }
+                    ]
+                );
+
+            } catch (pairingError) {
+                console.error('Enhanced device pairing failed:', pairingError);
+
+                try {
+                    await SmartLifeService.stopDevicePairing();
+                } catch (stopError) {
+                    console.warn('Error stopping pairing:', stopError);
+                }
+
+                const errorMessage = (pairingError as Error).message;
+
+                let userFriendlyMessage = 'No se pudo emparejar el dispositivo.';
+                let suggestions: string[] = [];
+                let actions: Array<{text: string, onPress?: () => void}> = [];
+
+                if (errorMessage.includes('timeout') || errorMessage.includes('TIMEOUT')) {
+                    userFriendlyMessage = 'El emparejamiento se agotó el tiempo de espera.';
+                    suggestions = [
+                        'Verifica que el dispositivo esté en modo de emparejamiento',
+                        'Acerca el dispositivo al router WiFi (menos de 3 metros)',
+                        'Asegúrate de que la red WiFi sea estable',
+                        'Reinicia el dispositivo y vuelve a intentar'
+                    ];
+                    actions = [
+                        { text: 'Reintentar', onPress: () => startRealDevicePairing(pairingMode) },
+                        { text: 'Probar Otro Modo', onPress: () => {
+                                const otherMode = pairingMode === 'EZ' ? 'AP' : 'EZ';
+                                startRealDevicePairing(otherMode);
+                            }},
+                        { text: 'Emparejamiento Inteligente', onPress: startSmartDevicePairing },
+                        { text: 'Cancelar' }
+                    ];
+                } else if (errorMessage.includes('password') || errorMessage.includes('PASSWORD')) {
+                    userFriendlyMessage = 'Error de contraseña WiFi.';
+                    suggestions = [
+                        'Verifica que la contraseña WiFi sea correcta',
+                        'Asegúrate de no tener espacios extra al inicio o final',
+                        'Distingue entre mayúsculas y minúsculas',
+                        'Verifica caracteres especiales'
+                    ];
+                    actions = [
+                        { text: 'Corregir Contraseña' },
+                        { text: 'Reintentar', onPress: () => startRealDevicePairing(pairingMode) }
+                    ];
+                } else if (errorMessage.includes('network') || errorMessage.includes('NETWORK')) {
+                    userFriendlyMessage = 'Error de conectividad de red.';
+                    suggestions = [
+                        'Verifica que tu teléfono esté conectado a WiFi',
+                        'Asegúrate de usar una red de 2.4GHz (no 5GHz)',
+                        'Revisa que el router esté funcionando correctamente',
+                        'Desactiva temporalmente el firewall del router'
+                    ];
+                    actions = [
+                        { text: 'Verificar Red', onPress: getCurrentWiFiSSID },
+                        { text: 'Probar Modo AP', onPress: () => startRealDevicePairing('AP') },
+                        { text: 'Cancelar' }
+                    ];
+                } else if (errorMessage.includes('device') || errorMessage.includes('DEVICE')) {
+                    userFriendlyMessage = 'El dispositivo no responde.';
+                    suggestions = [
+                        'Reinicia el dispositivo y ponlo en modo de emparejamiento',
+                        'Verifica que el LED parpadee correctamente',
+                        'Consulta el manual del dispositivo',
+                        'Asegúrate de que sea compatible con Tuya/Smart Life'
+                    ];
+                    actions = [
+                        { text: 'Reintentar', onPress: () => startRealDevicePairing(pairingMode) },
+                        { text: 'Probar Otro Modo', onPress: () => {
+                                const otherMode = pairingMode === 'EZ' ? 'AP' : 'EZ';
+                                startRealDevicePairing(otherMode);
+                            }},
+                        { text: 'Cancelar'}
+                    ];
+                } else {
+                    suggestions = [
+                        'Reinicia la aplicación e intenta nuevamente',
+                        'Verifica tu conexión a internet',
+                        'Contacta soporte si el problema persiste'
+                    ];
+                    actions = [
+                        { text: 'Reintentar', onPress: () => startRealDevicePairing(pairingMode) },
+                        { text: 'Emparejamiento Inteligente', onPress: startSmartDevicePairing },
+                        { text: 'Cancelar'}
+                    ];
+                }
+
+                const alertMessage = `${userFriendlyMessage}\n\n` +
+                    `Error técnico: ${errorMessage}\n\n` +
+                    `Sugerencias:\n${suggestions.map(s => `• ${s}`).join('\n')}`;
+
+                Alert.alert(
+                    `Error de Emparejamiento ${pairingMode}`,
+                    alertMessage,
+                    actions
+                );
+            }
+
+        } catch (error) {
+            console.error('Error starting enhanced device pairing:', error);
+            Alert.alert(
+                'Error',
+                `Error al iniciar el emparejamiento:\n${(error as Error).message}`
+            );
+        } finally {
+            setIsPairing(false);
+            setCurrentPairingMode(null);
+            setPairingProgress('');
+        }
+    }, [wifiSSID, wifiPassword, pairingTimeout, home.homeId, onDeviceAdded, requestLocationPermission, isWifiValid, wifiErrors, wifiWarnings, getCurrentWiFiSSID]);
+
+    const startSmartDevicePairing = useCallback(async () => {
+        try {
+            if (!wifiSSID.trim() || !wifiPassword.trim()) {
+                Alert.alert('Error', 'Por favor completa todos los campos');
+                return;
+            }
+
+            const hasPermission = await requestLocationPermission();
+            if (!hasPermission) {
+                Alert.alert('Permiso Requerido', 'El permiso de ubicación es necesario.');
+                return;
+            }
+
+            Alert.alert(
+                '🤖 Emparejamiento Inteligente',
+                'El sistema analizará tu red y dispositivo para usar automáticamente el mejor método de emparejamiento.\n\n' +
+                '• Análisis automático de red\n' +
+                '• Selección inteligente de modo\n' +
+                '• Reintentos adaptativos\n' +
+                '• Fallback automático\n\n' +
+                '¿Quieres continuar?',
+                [
+                    { text: 'Cancelar', style: 'cancel' },
+                    {
+                        text: 'Iniciar Emparejamiento Inteligente',
+                        onPress: async () => {
+                            setIsPairing(true);
+                            setCurrentPairingMode('SMART');
+                            setPairingProgress('Analizando red y dispositivo...');
+
+                            try {
+                                const result: PairingResult = await SmartLifeService.smartDevicePairing(
+                                    home.homeId,
+                                    wifiSSID,
+                                    wifiPassword,
+                                    {
+                                        timeout: pairingTimeout,
+                                        maxRetries: 2,
+                                        autoFallback: true,
+                                        onProgress: (step: string) => {
+                                            setPairingProgress(step);
+                                        }
+                                    }
+                                );
+
+                                if (result.success && result.device) {
+                                    Alert.alert(
+                                        '🎉 ¡Emparejamiento Inteligente Exitoso!',
+                                        `El dispositivo "${result.device.name}" ha sido emparejado exitosamente.\n\n` +
+                                        `• Modo usado: ${result.mode}\n` +
+                                        `• Intentos: ${result.attempts}\n` +
+                                        `• Tiempo: ${Math.round((result.duration || 0) / 1000)}s\n\n` +
+                                        `El sistema seleccionó automáticamente el método óptimo para tu configuración.`,
+                                        [{ text: 'Ver Dispositivo', onPress: () => onDeviceAdded(result.device!) }]
+                                    );
+                                } else {
+                                    throw new Error(result.error || 'Emparejamiento inteligente falló');
+                                }
+
+                            } catch (error) {
+                                console.error('Smart pairing failed:', error);
+                                Alert.alert(
+                                    '❌ Emparejamiento Inteligente Falló',
+                                    `No se pudo emparejar el dispositivo automáticamente:\n\n${(error as Error).message}\n\n` +
+                                    `Puedes intentar manualmente con modo EZ o AP, o verificar la configuración del dispositivo.`,
+                                    [
+                                        { text: 'Modo EZ Manual', onPress: () => startRealDevicePairing('EZ') },
+                                        { text: 'Modo AP Manual', onPress: () => startRealDevicePairing('AP') },
+                                        { text: 'Cancelar', style: 'cancel' }
+                                    ]
+                                );
+                            } finally {
+                                setIsPairing(false);
+                                setCurrentPairingMode(null);
+                                setPairingProgress('');
+                            }
+                        }
+                    }
+                ]
+            );
+        } catch (error) {
+            console.error('Error in smart pairing:', error);
+            Alert.alert('Error', `Error en emparejamiento inteligente: ${(error as Error).message}`);
+            setIsPairing(false);
+            setCurrentPairingMode(null);
+            setPairingProgress('');
+        }
+    }, [wifiSSID, wifiPassword, pairingTimeout, home.homeId, onDeviceAdded, requestLocationPermission, startRealDevicePairing]);
+
+    const stopPairing = useCallback(async () => {
+        try {
+            await SmartLifeService.stopDevicePairing();
+            setIsPairing(false);
+            setCurrentPairingMode(null);
+            setPairingProgress('');
+            Alert.alert('Emparejamiento Cancelado', 'El proceso de emparejamiento ha sido cancelado.');
+        } catch (error) {
+            console.error('Error stopping pairing:', error);
+        }
     }, []);
 
     const addTestDevice = useCallback(async () => {
@@ -132,154 +449,6 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
         }
     }, [testDeviceName, testDeviceType, isTestDeviceOnline, home.homeId, onDeviceAdded]);
 
-    const createPresetDevices = useCallback(async () => {
-        try {
-            setIsLoading(true);
-
-            Alert.alert(
-                'Crear Dispositivos de Demostración',
-                '¿Quieres crear 4 dispositivos de prueba predefinidos para demostración?',
-                [
-                    { text: 'Cancelar', style: 'cancel' },
-                    {
-                        text: 'Crear',
-                        onPress: async () => {
-                            try {
-                                const devices = await SmartLifeService.createPresetTestDevices(home.homeId);
-
-                                Alert.alert(
-                                    '¡Dispositivos Creados! 🎉',
-                                    `Se crearon ${devices.length} dispositivos de demostración exitosamente.`,
-                                    [
-                                        {
-                                            text: 'Ver Dispositivos',
-                                            onPress: onCancel
-                                        }
-                                    ]
-                                );
-                            } catch (error) {
-                                Alert.alert('Error', `No se pudieron crear los dispositivos: ${(error as Error).message}`);
-                            }
-                        }
-                    }
-                ]
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    }, [home.homeId, onCancel]);
-
-    const startRealDevicePairing = useCallback(async (pairingMode: 'AP' | 'EZ') => {
-        try {
-            // Validate inputs
-            if (!wifiSSID.trim()) {
-                Alert.alert('Error', 'Por favor ingresa el nombre de tu red WiFi');
-                return;
-            }
-
-            if (!wifiPassword.trim()) {
-                Alert.alert('Error', 'Por favor ingresa la contraseña de tu WiFi');
-                return;
-            }
-
-            // Request location permission
-            const hasPermission = await requestLocationPermission();
-            if (!hasPermission) {
-                Alert.alert(
-                    'Permiso Requerido',
-                    'El permiso de ubicación es necesario para el emparejamiento de dispositivos.'
-                );
-                return;
-            }
-
-            setIsPairing(true);
-            setPairingProgress('Iniciando emparejamiento simulado...');
-
-            console.log(`Starting simulated ${pairingMode} mode pairing:`, {
-                homeId: home.homeId,
-                ssid: wifiSSID,
-                passwordLength: wifiPassword.length,
-                timeout: pairingTimeout
-            });
-
-            try {
-                let pairedDevice: TuyaDevice;
-
-                if (pairingMode === 'EZ') {
-                    setPairingProgress('Simulando modo EZ...');
-                    pairedDevice = await SmartLifeService.startDevicePairingEZ(
-                        home.homeId,
-                        wifiSSID,
-                        wifiPassword,
-                        pairingTimeout
-                    );
-                } else {
-                    setPairingProgress('Simulando modo AP...');
-                    pairedDevice = await SmartLifeService.startDevicePairing(
-                        home.homeId,
-                        wifiSSID,
-                        wifiPassword,
-                        pairingTimeout
-                    );
-                }
-
-                Alert.alert(
-                    '¡Dispositivo Emparejado! 🎉 (Simulado)',
-                    `El dispositivo "${pairedDevice.name}" ha sido emparejado exitosamente.\n\n` +
-                    `⚠️ Este es un emparejamiento simulado para demostración. ` +
-                    `Para dispositivos reales, usa la aplicación Smart Life oficial.`,
-                    [
-                        {
-                            text: 'OK',
-                            onPress: () => {
-                                onDeviceAdded(pairedDevice);
-                            }
-                        }
-                    ]
-                );
-
-            } catch (pairingError) {
-                console.error('Device pairing failed:', pairingError);
-
-                try {
-                    await SmartLifeService.stopDevicePairing();
-                } catch (stopError) {
-                    console.warn('Error stopping pairing:', stopError);
-                }
-
-                Alert.alert(
-                    'Error de Emparejamiento (Simulado)',
-                    `No se pudo emparejar el dispositivo:\n${(pairingError as Error).message}\n\n` +
-                    'Nota: Este es un proceso simulado. En un escenario real:\n' +
-                    '• Verifica que el dispositivo esté en modo de emparejamiento\n' +
-                    '• Asegúrate de que la red WiFi sea de 2.4GHz\n' +
-                    '• Confirma que la contraseña sea correcta'
-                );
-            }
-
-        } catch (error) {
-            console.error('Error starting device pairing:', error);
-            Alert.alert(
-                'Error',
-                `Error al iniciar el emparejamiento:\n${(error as Error).message}`
-            );
-        } finally {
-            setIsPairing(false);
-            setPairingProgress('');
-        }
-    }, [wifiSSID, wifiPassword, pairingTimeout, home.homeId, onDeviceAdded, requestLocationPermission]);
-
-    const stopPairing = useCallback(async () => {
-        try {
-            await SmartLifeService.stopDevicePairing();
-            setIsPairing(false);
-            setPairingProgress('');
-            Alert.alert('Emparejamiento Cancelado', 'El proceso de emparejamiento ha sido cancelado.');
-        } catch (error) {
-            console.error('Error stopping pairing:', error);
-        }
-    }, []);
-
     const renderModeSelection = () => (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
             <Text style={styles.stepTitle}>Agregar Dispositivo</Text>
@@ -287,51 +456,26 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                 Elige el tipo de dispositivo que quieres agregar a "{home.name}"
             </Text>
 
-            {/* Notification about simulated pairing */}
-            <View style={styles.warningCard}>
-                <Text style={styles.warningTitle}>⚠️ Importante - Modo Demostración</Text>
-                <Text style={styles.warningText}>
-                    El emparejamiento de dispositivos reales está en modo simulado para esta demostración.
-                    {'\n\n'}Para emparejar dispositivos reales:
-                    {'\n'}• Usa la aplicación Smart Life oficial
-                    {'\n'}• O implementa las clases de activación completas del SDK
-                </Text>
-            </View>
 
-            {/* Real Device Options */}
+
             <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>🏠 Dispositivos Reales (Simulado)</Text>
+                <Text style={styles.sectionTitle}>🏠 Dispositivos Reales</Text>
 
                 <TouchableOpacity
-                    style={[styles.optionCard, styles.realDeviceCard]}
-                    onPress={() => setMode('real_device_ez')}
+                    style={[styles.optionCard, styles.smartDeviceCard]}
+                    onPress={() => setMode('real_device_smart')}
                 >
-                    <Text style={styles.optionIcon}>📶</Text>
+                    <Text style={styles.optionIcon}>🤖</Text>
                     <View style={styles.optionContent}>
-                        <Text style={styles.optionTitle}>Modo EZ (Simulado)</Text>
+                        <Text style={styles.optionTitle}>Emparejamiento Inteligente</Text>
                         <Text style={styles.optionDescription}>
-                            Demostración del emparejamiento rápido. Crea un dispositivo virtual que simula un emparejamiento exitoso.
-                        </Text>
-                    </View>
-                    <Text style={styles.optionArrow}>→</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.optionCard, styles.realDeviceCard]}
-                    onPress={() => setMode('real_device_ap')}
-                >
-                    <Text style={styles.optionIcon}>📡</Text>
-                    <View style={styles.optionContent}>
-                        <Text style={styles.optionTitle}>Modo AP (Simulado)</Text>
-                        <Text style={styles.optionDescription}>
-                            Demostración del emparejamiento alternativo. Simula conexión directa al dispositivo.
+                            IA que analiza tu red y selecciona automáticamente el mejor método. Recomendado para todos.
                         </Text>
                     </View>
                     <Text style={styles.optionArrow}>→</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Test Device Options */}
             <View style={styles.sectionContainer}>
                 <Text style={styles.sectionTitle}>🧪 Dispositivos de Prueba</Text>
 
@@ -348,53 +492,28 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                     </View>
                     <Text style={styles.optionArrow}>→</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.optionCard, styles.demoCard]}
-                    onPress={createPresetDevices}
-                    disabled={isLoading}
-                >
-                    <Text style={styles.optionIcon}>⚡</Text>
-                    <View style={styles.optionContent}>
-                        <Text style={styles.optionTitle}>Demo Completa</Text>
-                        <Text style={styles.optionDescription}>
-                            Crear automáticamente 4 dispositivos de prueba variados para demostración completa
-                        </Text>
-                    </View>
-                    {isLoading ? (
-                        <ActivityIndicator size="small" color="#9C27B0" />
-                    ) : (
-                        <Text style={styles.optionArrow}>→</Text>
-                    )}
-                </TouchableOpacity>
             </View>
         </ScrollView>
     );
 
-    const renderRealDevicePairing = (pairingMode: 'AP' | 'EZ') => (
+    const renderRealDevicePairing = (pairingMode: 'SMART') => (
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.stepTitle}>
-                {pairingMode === 'EZ' ? '📶 Modo EZ (Simulado)' : '📡 Modo AP (Simulado)'}
-            </Text>
+            <Text style={styles.stepTitle}>🤖 Emparejamiento Inteligente</Text>
             <Text style={styles.stepDescription}>
-                {pairingMode === 'EZ'
-                    ? 'Demostración del emparejamiento rápido para dispositivos Tuya'
-                    : 'Demostración del emparejamiento alternativo para dispositivos especiales'
-                }
+                IA que analiza tu configuración y selecciona automáticamente el método óptimo
             </Text>
 
-            {/* Demo notification */}
-            <View style={styles.demoNotification}>
-                <Text style={styles.demoNotificationIcon}>🎭</Text>
-                <View style={styles.demoNotificationContent}>
-                    <Text style={styles.demoNotificationTitle}>Modo Demostración</Text>
-                    <Text style={styles.demoNotificationText}>
-                        Este proceso creará un dispositivo virtual que simula un emparejamiento exitoso.
-                    </Text>
-                </View>
-            </View>
 
-            {/* WiFi Configuration */}
+            <WiFiValidator
+                ssid={wifiSSID}
+                password={wifiPassword}
+                homeId={home.homeId}
+                timeout={pairingTimeout}
+                mode={pairingMode}
+                onValidationChange={handleWiFiValidationChange}
+                style={styles.wifiValidator}
+            />
+
             <View style={styles.configSection}>
                 <Text style={styles.configTitle}>📶 Configuración WiFi</Text>
 
@@ -448,79 +567,23 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                 </View>
             </View>
 
-            {/* Instructions */}
-            <View style={styles.instructionsCard}>
-                <Text style={styles.instructionsTitle}>
-                    📋 Instrucciones {pairingMode === 'EZ' ? 'Modo EZ' : 'Modo AP'} (Simuladas)
-                </Text>
-                {pairingMode === 'EZ' ? (
-                    <Text style={styles.instructionsText}>
-                        En un escenario real:{'\n'}
-                        1. El dispositivo estaría en modo de emparejamiento{'\n'}
-                        2. El LED parpadearía rápidamente{'\n'}
-                        3. Tu WiFi sería de 2.4GHz{'\n'}
-                        4. El proceso tomaría 30-120 segundos{'\n\n'}
-                        En esta demo:{'\n'}
-                        • Se creará un dispositivo virtual{'\n'}
-                        • Simula un emparejamiento exitoso
-                    </Text>
-                ) : (
-                    <Text style={styles.instructionsText}>
-                        En un escenario real:{'\n'}
-                        1. El dispositivo estaría en modo AP{'\n'}
-                        2. Te conectarías a su red WiFi{'\n'}
-                        3. El dispositivo se uniría a tu red{'\n\n'}
-                        En esta demo:{'\n'}
-                        • Se simula todo el proceso{'\n'}
-                        • Se crea un dispositivo virtual
-                    </Text>
-                )}
-            </View>
-
-            {/* Pairing Status */}
-            {isPairing && (
-                <View style={styles.pairingStatusCard}>
-                    <ActivityIndicator size="large" color="#4CAF50" />
-                    <Text style={styles.pairingStatusText}>{pairingProgress}</Text>
-                    <Text style={styles.pairingSubText}>
-                        Simulando proceso de emparejamiento...
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={stopPairing}
-                    >
-                        <Text style={styles.cancelButtonText}>Cancelar Simulación</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {/* Action Buttons */}
             {!isPairing && (
-                <TouchableOpacity
-                    style={[
-                        styles.primaryButton,
-                        (!wifiSSID.trim() || !wifiPassword.trim()) && styles.buttonDisabled
-                    ]}
-                    onPress={() => startRealDevicePairing(pairingMode)}
-                    disabled={!wifiSSID.trim() || !wifiPassword.trim()}
-                >
-                    <Text style={styles.primaryButtonText}>
-                        🎭 Simular Emparejamiento {pairingMode}
-                    </Text>
-                </TouchableOpacity>
+                <>
+                    <TouchableOpacity
+                        style={[
+                            styles.primaryButton,
+                            styles.smartButton,
+                            (!wifiSSID.trim() || !wifiPassword.trim()) && styles.buttonDisabled
+                        ]}
+                        onPress={startSmartDevicePairing}
+                        disabled={!wifiSSID.trim() || !wifiPassword.trim()}
+                    >
+                        <Text style={styles.primaryButtonText}>
+                            🤖 Iniciar Emparejamiento Inteligente
+                        </Text>
+                    </TouchableOpacity>
+                </>
             )}
-
-            {/* Informational Cards */}
-            <View style={styles.infoCard}>
-                <Text style={styles.infoTitle}>ℹ️ Sobre el Emparejamiento Real</Text>
-                <Text style={styles.infoText}>
-                    Para implementar emparejamiento real necesitas:
-                    {'\n\n'}• SDK completo con clases de activación
-                    {'\n'}• Permisos de ubicación en Android
-                    {'\n'}• Configuración de red adecuada
-                    {'\n'}• Dispositivos físicos Tuya compatibles
-                </Text>
-            </View>
         </ScrollView>
     );
 
@@ -589,17 +652,6 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                 </View>
             </View>
 
-            <View style={styles.infoCard}>
-                <Text style={styles.infoTitle}>ℹ️ Información</Text>
-                <Text style={styles.infoText}>
-                    Los dispositivos de prueba funcionan como dispositivos reales pero son virtuales.
-                    {'\n\n'}Perfecto para:
-                    {'\n'}• Probar la interfaz
-                    {'\n'}• Desarrollo de funcionalidades
-                    {'\n'}• Demonstraciones
-                </Text>
-            </View>
-
             <TouchableOpacity
                 style={[styles.primaryButton, (!testDeviceName.trim() || isLoading) && styles.buttonDisabled]}
                 onPress={addTestDevice}
@@ -620,15 +672,14 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#4CAF50" />
 
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => {
                         if (isPairing) {
                             Alert.alert(
-                                'Simulación en Progreso',
-                                '¿Quieres cancelar la simulación de emparejamiento?',
+                                'Emparejamiento en Progreso',
+                                '¿Quieres cancelar el emparejamiento?',
                                 [
                                     { text: 'Continuar', style: 'cancel' },
                                     { text: 'Cancelar', onPress: stopPairing }
@@ -653,11 +704,17 @@ const AddDeviceScreen: React.FC<AddDeviceScreenProps> = ({
                 <View style={styles.headerPlaceholder} />
             </View>
 
-            {/* Content */}
             {mode === 'selection' && renderModeSelection()}
             {mode === 'test_device' && renderTestDevice()}
-            {mode === 'real_device_ez' && renderRealDevicePairing('EZ')}
-            {mode === 'real_device_ap' && renderRealDevicePairing('AP')}
+            {mode === 'real_device_smart' && renderRealDevicePairing('SMART')}
+
+            <PairingProgressModal
+                visible={isPairing}
+                mode={currentPairingMode}
+                progress={pairingProgress}
+                onCancel={stopPairing}
+                canCancel={true}
+            />
         </SafeAreaView>
     );
 };
@@ -725,57 +782,101 @@ const styles = StyleSheet.create({
         lineHeight: 22,
         marginBottom: 30,
     },
-
-    // Warning and demo notifications
-    warningCard: {
-        backgroundColor: '#fff3e0',
+    realPairingCard: {
+        backgroundColor: '#e8f5e8',
         borderRadius: 12,
         padding: 20,
         marginBottom: 25,
         borderLeftWidth: 4,
-        borderLeftColor: '#ff9800',
+        borderLeftColor: '#4CAF50',
     },
-    warningTitle: {
+    realPairingTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#f57c00',
+        color: '#2e7d32',
         marginBottom: 10,
     },
-    warningText: {
+    realPairingText: {
         fontSize: 14,
-        color: '#e65100',
+        color: '#388e3c',
         lineHeight: 20,
     },
-    demoNotification: {
-        backgroundColor: '#f3e5f5',
+    realDeviceNotification: {
+        backgroundColor: '#e8f5e8',
         borderRadius: 12,
         padding: 20,
         marginBottom: 20,
         flexDirection: 'row',
         alignItems: 'center',
         borderLeftWidth: 4,
-        borderLeftColor: '#9C27B0',
+        borderLeftColor: '#4CAF50',
     },
-    demoNotificationIcon: {
+    realDeviceNotificationIcon: {
         fontSize: 24,
         marginRight: 12,
     },
-    demoNotificationContent: {
+    realDeviceNotificationContent: {
         flex: 1,
     },
-    demoNotificationTitle: {
+    realDeviceNotificationTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#7B1FA2',
+        color: '#2e7d32',
         marginBottom: 5,
     },
-    demoNotificationText: {
+    realDeviceNotificationText: {
         fontSize: 14,
-        color: '#8E24AA',
+        color: '#388e3c',
         lineHeight: 18,
     },
-
-    // Sections
+    wifiValidator: {
+        marginBottom: 20,
+    },
+    smartDeviceCard: {
+        borderLeftWidth: 4,
+        borderLeftColor: '#9C27B0',
+        backgroundColor: '#fce4ec',
+    },
+    smartButton: {
+        backgroundColor: '#9C27B0',
+    },
+    alternativeMethodsContainer: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    alternativeMethodsTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#495057',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    alternativeMethodsButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
+    alternativeButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        minWidth: 70,
+        alignItems: 'center',
+    },
+    ezButton: {
+        backgroundColor: '#4CAF50',
+    },
+    apButton: {
+        backgroundColor: '#2196F3',
+    },
+    alternativeButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
     sectionContainer: {
         marginBottom: 25,
     },
@@ -786,8 +887,6 @@ const styles = StyleSheet.create({
         marginBottom: 15,
         marginLeft: 5,
     },
-
-    // Option Cards
     optionCard: {
         backgroundColor: 'white',
         borderRadius: 16,
@@ -801,17 +900,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 5,
     },
-    realDeviceCard: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#4CAF50',
-    },
     testDeviceCard: {
         borderLeftWidth: 4,
         borderLeftColor: '#9C27B0',
-    },
-    demoCard: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#FF9800',
     },
     optionIcon: {
         fontSize: 32,
@@ -836,8 +927,6 @@ const styles = StyleSheet.create({
         color: '#4CAF50',
         fontWeight: 'bold',
     },
-
-    // Buttons
     primaryButton: {
         backgroundColor: '#4CAF50',
         borderRadius: 12,
@@ -856,24 +945,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
-    cancelButton: {
-        backgroundColor: '#f44336',
-        borderRadius: 8,
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        marginTop: 15,
-    },
-    cancelButtonText: {
-        color: 'white',
-        fontSize: 14,
-        fontWeight: '600',
-    },
     buttonDisabled: {
         opacity: 0.6,
     },
-
-    // Configuration
     configSection: {
         backgroundColor: 'white',
         borderRadius: 12,
@@ -915,8 +989,6 @@ const styles = StyleSheet.create({
         marginTop: 5,
         fontStyle: 'italic',
     },
-
-    // Timeout Control
     timeoutContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -943,8 +1015,6 @@ const styles = StyleSheet.create({
         minWidth: 60,
         textAlign: 'center',
     },
-
-    // Device Type Grid
     deviceTypeGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -977,15 +1047,11 @@ const styles = StyleSheet.create({
     deviceTypeNameSelected: {
         color: '#2e7d32',
     },
-
-    // Switch Container
     switchContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-
-    // Info Cards
     infoCard: {
         backgroundColor: '#e3f2fd',
         borderRadius: 12,
@@ -1005,8 +1071,6 @@ const styles = StyleSheet.create({
         color: '#1565c0',
         lineHeight: 20,
     },
-
-    // Instructions
     instructionsCard: {
         backgroundColor: '#fff3e0',
         borderRadius: 12,
@@ -1025,31 +1089,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#e65100',
         lineHeight: 22,
-    },
-
-    // Pairing Status
-    pairingStatusCard: {
-        backgroundColor: '#e8f5e8',
-        borderRadius: 12,
-        padding: 25,
-        marginBottom: 20,
-        alignItems: 'center',
-        borderLeftWidth: 4,
-        borderLeftColor: '#4CAF50',
-    },
-    pairingStatusText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#2e7d32',
-        marginTop: 15,
-        marginBottom: 5,
-        textAlign: 'center',
-    },
-    pairingSubText: {
-        fontSize: 14,
-        color: '#388e3c',
-        textAlign: 'center',
-        marginBottom: 10,
     },
 });
 

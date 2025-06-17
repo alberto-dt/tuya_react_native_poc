@@ -78,12 +78,14 @@ const AddHomeScreen: React.FC<AddHomeScreenProps> = ({
     const getCurrentLocation = useCallback(async () => {
         try {
             setIsGettingLocation(true);
-            const location = await SmartLifeService.getCurrentLocation();
-            setCustomLat(location.lat.toString());
-            setCustomLon(location.lon.toString());
+            const ssid = await SmartLifeService.getCurrentWifiSSID();
+            const defaultLat = -0.1807;
+            const defaultLon = -78.4678;
+            setCustomLat(defaultLat.toString());
+            setCustomLon(defaultLon.toString());
             Alert.alert(
-                'Ubicación Obtenida',
-                `Lat: ${location.lat.toFixed(4)}\nLon: ${location.lon.toFixed(4)}`
+                'Ubicación por Defecto',
+                `Usando ubicación por defecto:\nLat: ${defaultLat.toFixed(4)}\nLon: ${defaultLon.toFixed(4)}`
             );
         } catch (error) {
             console.error('Error getting location:', error);
@@ -106,20 +108,19 @@ const AddHomeScreen: React.FC<AddHomeScreenProps> = ({
             let lon = 0;
 
             if (useCurrentLocation) {
-                const location = await SmartLifeService.getCurrentLocation();
-                lat = location.lat;
-                lon = location.lon;
+                lat = -0.1807;
+                lon = -78.4678;
             } else {
                 lat = parseFloat(customLat);
                 lon = parseFloat(customLon);
             }
 
-            const newHome = await SmartLifeService.createHome({
-                name: homeName.trim(),
-                geoName: address.trim(),
+            const newHome = await SmartLifeService.createHome(
+                homeName.trim(),
+                address.trim(),
                 lat,
-                lon,
-            });
+                lon
+            );
 
             Alert.alert(
                 '¡Hogar Creado! 🎉',
@@ -287,7 +288,6 @@ const AddHomeScreen: React.FC<AddHomeScreenProps> = ({
                     </View>
                 </View>
 
-                {/* Botones */}
                 <View style={styles.buttonContainer}>
                     <TouchableOpacity
                         style={styles.createButton}

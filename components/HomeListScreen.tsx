@@ -26,7 +26,7 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
                                                            user,
                                                            onLogout,
                                                            onHomeSelected,
-                                                           onAddHome, // NUEVO
+                                                           onAddHome,
                                                        }) => {
     const [homes, setHomes] = useState<TuyaHome[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -181,7 +181,6 @@ const HomeListScreen: React.FC<HomeListScreenProps> = ({
                         <Text style={styles.subtitle}>Smart Life - {user.username || user.email}</Text>
                     </View>
                     <View style={styles.headerButtons}>
-                        {/* NUEVO: Botón Agregar Hogar */}
                         <TouchableOpacity
                             style={styles.addButton}
                             onPress={handleAddHome}

@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 
 import SmartLifeService from '../services/SmartLifeService';
-import type { TuyaDevice, TuyaHome, TuyaUser } from '../services/SmartLifeService';
+import type { TuyaDevice, TuyaHome, TuyaUser } from '@/services/SmartLifeService';
 
 interface DeviceListScreenProps {
     user: TuyaUser;
@@ -119,7 +119,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                 }
             );
         } else {
-            // Android Alert
             const alertButtons: AlertButton[] = [
                 {
                     text: 'Ver Detalles',
@@ -175,7 +174,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
                         await SmartLifeService.removeDevice(device.devId, home.homeId);
 
-                        // Actualizar la lista de dispositivos
                         setDevices(prevDevices =>
                             prevDevices.filter(d => d.devId !== device.devId)
                         );
@@ -249,7 +247,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
 
                         await SmartLifeService.clearAllTestDevices();
 
-                        // Recargar la lista de dispositivos
                         await loadDevices(false);
 
                         const successButtons: AlertButton[] = [
@@ -298,21 +295,28 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
             console.log(`Toggling switch_${switchNumber} for device ${device.name}: ${currentState} -> ${newState}`);
 
             const command = { [`switch_${switchNumber}`]: newState };
-            await SmartLifeService.controlDevice(device.devId, command);
 
-            setDevices(prevDevices =>
-                prevDevices.map(d =>
-                    d.devId === device.devId
-                        ? {
-                            ...d,
+            await new Promise((resolve, reject) => {
+                try {
+                    const deviceIndex = devices.findIndex(d => d.devId === device.devId);
+                    if (deviceIndex !== -1) {
+                        const updatedDevices = [...devices];
+                        updatedDevices[deviceIndex] = {
+                            ...updatedDevices[deviceIndex],
                             status: {
-                                ...d.status,
+                                ...updatedDevices[deviceIndex].status,
                                 [`switch_${switchNumber}`]: newState
                             }
-                        }
-                        : d
-                )
-            );
+                        };
+                        setDevices(updatedDevices);
+                        resolve(void 0);
+                    } else {
+                        reject(new Error('Device not found'));
+                    }
+                } catch (error) {
+                    reject(error);
+                }
+            });
 
             console.log(`Switch ${switchNumber} toggled successfully`);
 
@@ -335,7 +339,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                 return newSet;
             });
         }
-    }, []);
+    }, [devices]);
 
     const handleRefresh = useCallback(() => {
         loadDevices(true);
@@ -708,14 +712,7 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                 ) : devices.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyTitle}>📱 No hay dispositivos</Text>
-                        <Text style={styles.emptyMessage}>
-                            No se encontraron dispositivos en "{home.name}".{'\n\n'}
-                            Para agregar dispositivos:
-                            {'\n'}• Abre la app Smart Life
-                            {'\n'}• Toca "+" para agregar dispositivo
-                            {'\n'}• Sigue las instrucciones de emparejamiento
-                            {'\n'}• Los dispositivos aparecerán automáticamente aquí
-                        </Text>
+
                         <TouchableOpacity
                             style={styles.retryButton}
                             onPress={() => loadDevices(false)}
@@ -747,7 +744,6 @@ const DeviceListScreen: React.FC<DeviceListScreenProps> = ({
                             </Text>
                         </View>
 
-                        {/* Botones de acción */}
                         <View style={styles.actionButtonsContainer}>
                             {onAddDevice && (
                                 <TouchableOpacity
@@ -1149,7 +1145,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 16,
     },
-    // Modal Styles
     modalContainer: {
         flex: 1,
         backgroundColor: '#f5f5f5',

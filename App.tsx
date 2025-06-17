@@ -338,7 +338,6 @@ const App: React.FC = () => {
     );
   }
 
-  // NUEVA PANTALLA DE DISPOSITIVOS MEJORADA
   if (currentScreen === 'deviceList' && user && selectedHome) {
     return (
         <DeviceListScreen
@@ -351,7 +350,6 @@ const App: React.FC = () => {
     );
   }
 
-  // NUEVA PANTALLA PARA AGREGAR DISPOSITIVOS
   if (currentScreen === 'addDevice' && user && selectedHome) {
     return (
         <AddDeviceScreen
@@ -414,7 +412,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 15,
     fontSize: 16,
-    color: '#666',
+    color: '#333333',
     textAlign: 'center',
     paddingHorizontal: 20,
   },
@@ -434,7 +432,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#E3F2FD',
   },
   loginContainer: {
     flex: 1,
@@ -457,6 +455,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#333',
   },
   button: {
     backgroundColor: '#2196F3',

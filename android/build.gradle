@@ -1,15 +1,12 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-
 buildscript {
     ext {
         buildToolsVersion = "34.0.0"
-        minSdkVersion = 23  // Updated from 21 to 23 for Tuya SDK compatibility
+        minSdkVersion = 23
         compileSdkVersion = 34
         targetSdkVersion = 34
         ndkVersion = "25.1.8937393"
         kotlinVersion = "1.8.10"
 
-        // Tuya BizBundle version - centralized management
         tuyaBizBundleBomVersion = "6.2.16"
         tuyaSDKVersion = "6.2.2"
     }
@@ -17,7 +14,6 @@ buildscript {
         google()
         mavenCentral()
 
-        // Tuya repositories for buildscript dependencies - MUST BE HERE
         maven {
             url 'https://maven-other.tuya.com/repository/maven-releases/'
             name 'TuyaMavenReleases'
@@ -27,24 +23,13 @@ buildscript {
             name 'TuyaMavenCommercial'
         }
 
-        // Huawei HMS Core repository
         maven {
             url 'https://developer.huawei.com/repo/'
             name 'HuaweiDeveloper'
         }
 
-        // Additional repositories
         maven { url 'https://jitpack.io' }
 
-        // JCenter for ImmersionBar and other legacy dependencies
-        jcenter {
-            content {
-                includeModule("jp.wasabeef", "recyclerview-animators")
-                includeModule("com.geyifeng.immersionbar", "immersionbar")
-            }
-        }
-
-        // JCenter for ImmersionBar and other legacy dependencies
         jcenter {
             content {
                 includeModule("jp.wasabeef", "recyclerview-animators")
@@ -55,9 +40,6 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.0")
         classpath("com.facebook.react:react-native-gradle-plugin")
-
-        // If you need any Tuya-specific build plugins, add them here
-        // classpath("com.thingclips.smart:thingsmart-gradle-plugin:1.0.0")
     }
 }
 
@@ -66,8 +48,6 @@ allprojects {
         google()
         mavenCentral()
 
-        // Tuya Maven repositories - Required for all Tuya dependencies
-        // IMPORTANT: These must be declared in the correct order
         maven {
             url 'https://maven-other.tuya.com/repository/maven-releases/'
             name 'TuyaMavenReleases'
@@ -77,68 +57,55 @@ allprojects {
             name 'TuyaMavenCommercial'
         }
 
-        // Huawei HMS Core repository for HMS dependencies
         maven {
             url 'https://developer.huawei.com/repo/'
             name 'HuaweiDeveloper'
         }
 
-        // Additional repositories
         maven { url 'https://jitpack.io' }
 
-        // Local repository for any .aar files
         flatDir {
             dirs 'libs'
         }
     }
 
-    // Global configurations for all modules
     configurations.all {
-        // Global resolution strategy
         resolutionStrategy {
-            // Force specific versions to avoid conflicts
             force "org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}"
             force 'androidx.core:core:1.8.0'
             force 'androidx.fragment:fragment:1.5.0'
             force 'androidx.appcompat:appcompat:1.5.0'
             force 'com.google.android.material:material:1.6.1'
 
-            // OkHttp family
             force 'com.squareup.okhttp3:okhttp:4.12.0'
             force 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
             force 'com.squareup.okio:okio:3.2.0'
 
-            // ExoPlayer family - compatible versions
             force 'com.google.android.exoplayer:exoplayer-core:2.18.7'
             force 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
             force 'com.google.android.exoplayer:exoplayer-dash:2.18.7'
             force 'com.google.android.exoplayer:exoplayer-hls:2.18.7'
             force 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.18.7'
 
-            // HMS Core
             force 'com.huawei.hms:base:6.12.0.300'
 
-            // Other common libraries
             force 'com.google.android.flexbox:flexbox:3.0.0'
             force 'jp.wasabeef:recyclerview-animators:4.0.2'
             force 'commons-io:commons-io:2.11.0'
             force 'org.apache.commons:commons-lang3:3.12.0'
             force 'com.facebook.fbjni:fbjni:0.3.0'
 
-            // ImmersionBar (using official version)
             force 'com.geyifeng.immersionbar:immersionbar:3.2.2'
         }
     }
 }
 
-// Global gradle options
 gradle.projectsEvaluated {
     tasks.withType(JavaCompile) {
         options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
     }
 }
 
-// Clean task
 task clean(type: Delete) {
     delete rootProject.buildDir
 }

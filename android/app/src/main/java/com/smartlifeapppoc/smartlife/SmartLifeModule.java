@@ -43,7 +43,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
     private static final AtomicInteger mockDeviceCounter = new AtomicInteger(1);
     private final List<WritableMap> mockDevices = new ArrayList<>();
 
-    // Variables para simular emparejamiento
     private boolean isPairingInProgress = false;
     private String currentPairingMode = null;
 
@@ -62,39 +61,29 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
         final Map<String, Object> constants = new HashMap<>();
         constants.put("EXAMPLE_CONSTANT", "example");
         constants.put("MOCK_DEVICE_PREFIX", "mock_device_");
-        constants.put("PAIRING_AVAILABLE", false); // Indicar que el emparejamiento real no está disponible
+        constants.put("PAIRING_AVAILABLE", false);
         return constants;
     }
-
-    // === MÉTODOS BÁSICOS (SIN CAMBIOS) ===
 
     @ReactMethod
     public void listAvailableMethods(Promise promise) {
         try {
             String methods = "Available methods:\n" +
                     "- initSDK\n" +
-                    "- initSDKWithDataCenter\n" +
                     "- loginWithEmail\n" +
-                    "- loginWithPhone\n" +
                     "- logout\n" +
                     "- registerWithEmail\n" +
                     "- getHomeList\n" +
                     "- createHome\n" +
-                    "- updateHome\n" +
-                    "- deleteHome\n" +
                     "- getDeviceList\n" +
-                    "- controlDevice\n" +
-                    "- getDeviceSchema\n" +
                     "- getCurrentWifiSSID\n" +
                     "- startDevicePairingEZ (SIMULATED)\n" +
-                    "- startDevicePairing (SIMULATED)\n" +
                     "- stopDevicePairing (SIMULATED)\n" +
                     "- addTestDevice\n" +
                     "- removeDevice\n" +
                     "- removeTestDevice\n" +
                     "- removeRealDevice\n" +
                     "- clearAllTestDevices\n" +
-                    "- getDeviceDeletionStats\n" +
                     "- destroy";
             promise.resolve(methods);
         } catch (Exception e) {
@@ -111,23 +100,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
             ThingHomeSdk.init(application, appKey, secretKey);
 
             Log.d(TAG, "SDK initialization completed successfully");
-            promise.resolve("SDK initialized successfully");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error initializing SDK: " + e.getMessage(), e);
-            promise.reject("INIT_ERROR", "Failed to initialize SDK: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void initSDKWithDataCenter(String appKey, String secretKey, String endpoint, Promise promise) {
-        try {
-            Log.d(TAG, "Initializing Tuya SDK with data center - appKey: " + appKey + ", endpoint: " + endpoint);
-
-            Application application = (Application) getReactApplicationContext().getApplicationContext();
-            ThingHomeSdk.init(application, appKey, secretKey);
-
-            Log.d(TAG, "SDK initialization completed successfully (endpoint parameter noted)");
             promise.resolve("SDK initialized successfully");
 
         } catch (Exception e) {
@@ -165,38 +137,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             Log.e(TAG, "Exception during login: " + e.getMessage(), e);
             promise.reject("LOGIN_ERROR", "Exception during login: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void loginWithPhone(String phone, String password, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Attempting login with phone: " + phone + ", country: " + countryCode);
-
-            ThingHomeSdk.getUserInstance().loginWithPhonePassword(countryCode, phone, password, new ILoginCallback() {
-                @Override
-                public void onSuccess(User user) {
-                    Log.d(TAG, "Phone login successful for user: " + user.getUsername());
-
-                    WritableMap userMap = new WritableNativeMap();
-                    userMap.putString("uid", user.getUid());
-                    userMap.putString("username", user.getUsername());
-                    userMap.putString("email", user.getEmail() != null ? user.getEmail() : "");
-                    userMap.putString("avatarUrl", "");
-
-                    promise.resolve(userMap);
-                }
-
-                @Override
-                public void onError(String code, String error) {
-                    Log.e(TAG, "Phone login failed: " + code + " - " + error);
-                    promise.reject(code, "Phone login failed: " + error);
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception during phone login: " + e.getMessage(), e);
-            promise.reject("PHONE_LOGIN_ERROR", "Exception during phone login: " + e.getMessage());
         }
     }
 
@@ -336,58 +276,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void updateHome(int homeId, String homeName, String geoName, double lat, double lon, Promise promise) {
-        try {
-            Log.d(TAG, "Updating home: " + homeId + " with name: " + homeName);
-
-            IThingHome home = ThingHomeSdk.newHomeInstance(homeId);
-            home.updateHome(homeName, lat, lon, geoName, new IResultCallback() {
-                @Override
-                public void onError(String code, String error) {
-                    Log.e(TAG, "Error updating home: " + code + " - " + error);
-                    promise.reject(code, "Failed to update home: " + error);
-                }
-
-                @Override
-                public void onSuccess() {
-                    Log.d(TAG, "Home updated successfully");
-                    promise.resolve("Home updated successfully");
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception updating home: " + e.getMessage(), e);
-            promise.reject("UPDATE_HOME_ERROR", "Exception updating home: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void deleteHome(int homeId, Promise promise) {
-        try {
-            Log.d(TAG, "Deleting home: " + homeId);
-
-            IThingHome home = ThingHomeSdk.newHomeInstance(homeId);
-            home.dismissHome(new IResultCallback() {
-                @Override
-                public void onError(String code, String error) {
-                    Log.e(TAG, "Error deleting home: " + code + " - " + error);
-                    promise.reject(code, "Failed to delete home: " + error);
-                }
-
-                @Override
-                public void onSuccess() {
-                    Log.d(TAG, "Home deleted successfully");
-                    promise.resolve("Home deleted successfully");
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception deleting home: " + e.getMessage(), e);
-            promise.reject("DELETE_HOME_ERROR", "Exception deleting home: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
     public void getDeviceList(int homeId, Promise promise) {
         Log.d(TAG, "=== GET DEVICE LIST (WITH MOCK SUPPORT) ===");
         Log.d(TAG, "Home ID: " + homeId);
@@ -400,7 +288,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
 
                     WritableArray deviceArray = new WritableNativeArray();
 
-                    // Agregar dispositivos reales
                     if (homeBean.getDeviceList() != null && !homeBean.getDeviceList().isEmpty()) {
                         Log.d(TAG, "Found " + homeBean.getDeviceList().size() + " real devices");
 
@@ -410,7 +297,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
                         }
                     }
 
-                    // Agregar dispositivos mock
                     Log.d(TAG, "Adding " + mockDevices.size() + " mock devices");
                     for (WritableMap mockDevice : mockDevices) {
                         deviceArray.pushMap(mockDevice);
@@ -446,55 +332,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void controlDevice(String deviceId, String commands, Promise promise) {
-        Log.d(TAG, "=== CONTROL DEVICE (ENHANCED) ===");
-        Log.d(TAG, "Device ID: " + deviceId);
-        Log.d(TAG, "Commands: " + commands);
-
-        if (deviceId.startsWith("mock_") || deviceId.startsWith("test_")) {
-            controlMockDevice(deviceId, commands, promise);
-            return;
-        }
-
-        try {
-            org.json.JSONObject commandsJson = new org.json.JSONObject(commands);
-
-            Map<String, Object> commandMap = new HashMap<>();
-            java.util.Iterator<String> keys = commandsJson.keys();
-
-            while (keys.hasNext()) {
-                String key = keys.next();
-                Object value = commandsJson.get(key);
-                commandMap.put(key, value);
-                Log.d(TAG, "Command: " + key + " = " + value);
-            }
-
-            String dpsString = new org.json.JSONObject(commandMap).toString();
-
-            ThingHomeSdk.newDeviceInstance(deviceId).publishDps(
-                    dpsString,
-                    new IResultCallback() {
-                        @Override
-                        public void onError(String code, String error) {
-                            Log.e(TAG, "Device control error: " + code + " - " + error);
-                            promise.reject(code, "Control failed: " + error);
-                        }
-
-                        @Override
-                        public void onSuccess() {
-                            Log.d(TAG, "Device control successful");
-                            promise.resolve("Device control executed successfully");
-                        }
-                    }
-            );
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception controlling device: " + e.getMessage(), e);
-            promise.reject("CONTROL_DEVICE_ERROR", "Exception controlling device: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
     public void getCurrentWifiSSID(Promise promise) {
         try {
             String ssid = getCurrentWifiName();
@@ -505,8 +342,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
             promise.reject("WIFI_SSID_ERROR", "Exception getting WiFi SSID: " + e.getMessage());
         }
     }
-
-    // === MÉTODOS DE EMPAREJAMIENTO SIMULADO ===
 
     @ReactMethod
     public void startDevicePairingEZ(int homeId, String ssid, String password, int timeout, Promise promise) {
@@ -524,13 +359,11 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
             isPairingInProgress = true;
             currentPairingMode = "EZ";
 
-            // Simular proceso de emparejamiento
             android.os.Handler handler = new android.os.Handler();
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        // Crear un dispositivo simulado "recién emparejado"
                         WritableMap pairedDevice = createSimulatedPairedDevice(ssid);
 
                         isPairingInProgress = false;
@@ -545,60 +378,13 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
                         promise.reject("EZ_PAIRING_SIMULATION_ERROR", "EZ Pairing simulation failed: " + e.getMessage());
                     }
                 }
-            }, 3000); // Simular 3 segundos de emparejamiento
+            }, 3000);
 
         } catch (Exception e) {
             Log.e(TAG, "Exception starting EZ pairing simulation: " + e.getMessage(), e);
             isPairingInProgress = false;
             currentPairingMode = null;
             promise.reject("START_EZ_PAIRING_ERROR", "Exception starting EZ pairing simulation: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void startDevicePairing(int homeId, String ssid, String password, int timeout, Promise promise) {
-        Log.d(TAG, "=== START DEVICE PAIRING AP MODE (SIMULATED) ===");
-        Log.d(TAG, "Home ID: " + homeId);
-        Log.d(TAG, "SSID: " + ssid);
-        Log.d(TAG, "Timeout: " + timeout);
-
-        if (isPairingInProgress) {
-            promise.reject("PAIRING_IN_PROGRESS", "Device pairing is already in progress. Stop current pairing first.");
-            return;
-        }
-
-        try {
-            isPairingInProgress = true;
-            currentPairingMode = "AP";
-
-            // Simular proceso de emparejamiento AP (más lento)
-            android.os.Handler handler = new android.os.Handler();
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        // Crear un dispositivo simulado "recién emparejado"
-                        WritableMap pairedDevice = createSimulatedPairedDevice(ssid);
-
-                        isPairingInProgress = false;
-                        currentPairingMode = null;
-
-                        Log.d(TAG, "AP Pairing simulation completed successfully");
-                        promise.resolve(pairedDevice);
-
-                    } catch (Exception e) {
-                        isPairingInProgress = false;
-                        currentPairingMode = null;
-                        promise.reject("AP_PAIRING_SIMULATION_ERROR", "AP Pairing simulation failed: " + e.getMessage());
-                    }
-                }
-            }, 5000); // Simular 5 segundos de emparejamiento AP
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception starting AP pairing simulation: " + e.getMessage(), e);
-            isPairingInProgress = false;
-            currentPairingMode = null;
-            promise.reject("START_AP_PAIRING_ERROR", "Exception starting AP pairing simulation: " + e.getMessage());
         }
     }
 
@@ -646,14 +432,11 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
         statusMap.putBoolean("switch_1", false);
         deviceMap.putMap("status", statusMap);
 
-        // Agregar a la lista de dispositivos mock para que aparezca en getDeviceList
         mockDevices.add(deviceMap);
 
         Log.d(TAG, "Simulated paired device created: " + deviceMap.getString("name"));
         return deviceMap;
     }
-
-    // === MÉTODOS PARA DISPOSITIVOS DE PRUEBA (SIN CAMBIOS) ===
 
     @ReactMethod
     public void addTestDevice(int homeId, String deviceName, String deviceType, Promise promise) {
@@ -711,7 +494,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "Device ID: " + deviceId);
             Log.d(TAG, "Home ID: " + homeId);
 
-            // Implementación real para eliminar dispositivos
             IThingDevice device = ThingHomeSdk.newDeviceInstance(deviceId);
             device.removeDevice(new IResultCallback() {
                 @Override
@@ -768,53 +550,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
             promise.reject("CLEAR_TEST_DEVICES_ERROR", "Error limpiando dispositivos de prueba: " + e.getMessage());
         }
     }
-
-    @ReactMethod
-    public void getDeviceDeletionStats(Promise promise) {
-        try {
-            Log.d(TAG, "=== GET DEVICE DELETION STATS ===");
-
-            WritableMap stats = new WritableNativeMap();
-            stats.putInt("totalDevices", mockDevices.size());
-            stats.putInt("testDevices", mockDevices.size());
-            stats.putInt("realDevices", 0);
-            stats.putBoolean("canDeleteTest", mockDevices.size() > 0);
-            stats.putBoolean("canDeleteReal", true);
-
-            promise.resolve(stats);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting deletion stats: " + e.getMessage(), e);
-            promise.reject("GET_STATS_ERROR", "Error obteniendo estadísticas: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void getDeviceSchema(String deviceId, Promise promise) {
-        Log.d(TAG, "=== GET DEVICE SCHEMA ===");
-        Log.d(TAG, "Device ID: " + deviceId);
-
-        try {
-            WritableArray schemaArray = new WritableNativeArray();
-
-            WritableMap basicSchema = new WritableNativeMap();
-            basicSchema.putString("id", "switch_1");
-            basicSchema.putString("code", "switch_1");
-            basicSchema.putString("name", "Switch");
-            basicSchema.putString("type", "Boolean");
-            basicSchema.putString("mode", "rw");
-            schemaArray.pushMap(basicSchema);
-
-            Log.d(TAG, "Device schema retrieved");
-            promise.resolve(schemaArray);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception getting device schema: " + e.getMessage(), e);
-            promise.reject("GET_SCHEMA_ERROR", "Exception getting device schema: " + e.getMessage());
-        }
-    }
-
-    // === MÉTODOS AUXILIARES (SIN CAMBIOS) ===
 
     private WritableMap convertDeviceBeanToMap(DeviceBean device) {
         WritableMap deviceMap = new WritableNativeMap();
@@ -991,58 +726,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
         return status;
     }
 
-    private void controlMockDevice(String deviceId, String commands, Promise promise) {
-        try {
-            Log.d(TAG, "=== CONTROL MOCK DEVICE ===");
-            Log.d(TAG, "Device ID: " + deviceId);
-            Log.d(TAG, "Commands: " + commands);
-
-            WritableMap targetDevice = null;
-            for (WritableMap device : mockDevices) {
-                if (device.hasKey("devId") && deviceId.equals(device.getString("devId"))) {
-                    targetDevice = device;
-                    break;
-                }
-            }
-
-            if (targetDevice == null) {
-                promise.reject("DEVICE_NOT_FOUND", "Dispositivo mock no encontrado: " + deviceId);
-                return;
-            }
-
-            org.json.JSONObject commandsJson = new org.json.JSONObject(commands);
-
-            WritableMap newStatus = new WritableNativeMap();
-
-            java.util.Iterator<String> keys = commandsJson.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                Object value = commandsJson.get(key);
-
-                if (value instanceof Boolean) {
-                    newStatus.putBoolean(key, (Boolean) value);
-                } else if (value instanceof Integer) {
-                    newStatus.putInt(key, (Integer) value);
-                } else if (value instanceof Double) {
-                    newStatus.putDouble(key, (Double) value);
-                } else {
-                    newStatus.putString(key, value.toString());
-                }
-
-                Log.d(TAG, "Applied command: " + key + " = " + value);
-            }
-
-            targetDevice.putMap("status", newStatus);
-
-            Log.d(TAG, "Mock device control successful");
-            promise.resolve("Control de dispositivo mock exitoso");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error controlling mock device: " + e.getMessage(), e);
-            promise.reject("CONTROL_MOCK_ERROR", "Error controlando dispositivo mock: " + e.getMessage());
-        }
-    }
-
     private String getCurrentWifiName() {
         try {
             WifiManager wifiManager = (WifiManager) getReactApplicationContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -1081,186 +764,6 @@ public class SmartLifeModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             Log.e(TAG, "Error destroying SmartLifeModule: " + e.getMessage(), e);
             promise.reject("DESTROY_ERROR", "Error destroying SmartLifeModule: " + e.getMessage());
-        }
-    }
-
-    // === MÉTODOS DE TESTING ===
-
-    @ReactMethod
-    public void testBasicLogging(String email, String password, Promise promise) {
-        try {
-            Log.d(TAG, "=== TEST BASIC LOGGING ===");
-            Log.d(TAG, "Email: " + email);
-            Log.d(TAG, "Password length: " + (password != null ? password.length() : 0));
-            Log.d(TAG, "Mock devices count: " + mockDevices.size());
-            Log.d(TAG, "Pairing in progress: " + isPairingInProgress);
-            Log.d(TAG, "Current pairing mode: " + currentPairingMode);
-
-            WritableMap result = new WritableNativeMap();
-            result.putString("status", "success");
-            result.putString("message", "Basic logging test completed");
-            result.putInt("mockDevicesCount", mockDevices.size());
-            result.putBoolean("pairingInProgress", isPairingInProgress);
-            result.putString("currentPairingMode", currentPairingMode != null ? currentPairingMode : "none");
-            result.putString("timestamp", String.valueOf(System.currentTimeMillis()));
-
-            promise.resolve(result);
-        } catch (Exception e) {
-            Log.e(TAG, "Error in basic logging test: " + e.getMessage(), e);
-            promise.reject("TEST_LOGGING_ERROR", "Error in basic logging test: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void testMultipleServers(String email, String password, Promise promise) {
-        try {
-            Log.d(TAG, "=== TEST MULTIPLE SERVERS ===");
-            Log.d(TAG, "Testing server connectivity...");
-
-            WritableArray servers = new WritableNativeArray();
-
-            WritableMap server1 = new WritableNativeMap();
-            server1.putString("name", "US Server");
-            server1.putString("status", "online");
-            server1.putInt("latency", 45);
-            servers.pushMap(server1);
-
-            WritableMap server2 = new WritableNativeMap();
-            server2.putString("name", "EU Server");
-            server2.putString("status", "online");
-            server2.putInt("latency", 78);
-            servers.pushMap(server2);
-
-            WritableMap server3 = new WritableNativeMap();
-            server3.putString("name", "Asia Server");
-            server3.putString("status", "online");
-            server3.putInt("latency", 123);
-            servers.pushMap(server3);
-
-            WritableMap result = new WritableNativeMap();
-            result.putString("status", "success");
-            result.putString("message", "Multiple servers test completed");
-            result.putArray("servers", servers);
-            result.putString("recommendedServer", "US Server");
-
-            promise.resolve(result);
-        } catch (Exception e) {
-            Log.e(TAG, "Error in multiple servers test: " + e.getMessage(), e);
-            promise.reject("TEST_SERVERS_ERROR", "Error in multiple servers test: " + e.getMessage());
-        }
-    }
-
-    // === MÉTODOS DE VERIFICACIÓN SIMULADOS ===
-
-    @ReactMethod
-    public void sendEmailVerificationCode(String email, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Sending email verification code to: " + email);
-            promise.resolve("Código de verificación enviado a " + email);
-        } catch (Exception e) {
-            promise.reject("SEND_EMAIL_CODE_ERROR", "Error sending email verification: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void sendSMSVerificationCode(String phone, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Sending SMS verification code to: " + phone);
-            promise.resolve("Código de verificación enviado a " + phone);
-        } catch (Exception e) {
-            promise.reject("SEND_SMS_CODE_ERROR", "Error sending SMS verification: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void verifyEmailCode(String email, String verificationCode, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Verifying email code for: " + email);
-            if ("123456".equals(verificationCode)) {
-                promise.resolve("Código de email verificado exitosamente");
-            } else {
-                promise.reject("INVALID_CODE", "Código de verificación inválido");
-            }
-        } catch (Exception e) {
-            promise.reject("VERIFY_EMAIL_CODE_ERROR", "Error verifying email code: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void verifySMSCode(String phone, String verificationCode, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Verifying SMS code for: " + phone);
-            if ("123456".equals(verificationCode)) {
-                promise.resolve("Código de SMS verificado exitosamente");
-            } else {
-                promise.reject("INVALID_CODE", "Código de verificación inválido");
-            }
-        } catch (Exception e) {
-            promise.reject("VERIFY_SMS_CODE_ERROR", "Error verifying SMS code: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void registerWithPhone(String phone, String password, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Attempting registration with phone: " + phone + ", country: " + countryCode);
-
-            String verificationCode = "123456";
-
-            ThingHomeSdk.getUserInstance().registerAccountWithPhone(countryCode, phone, password, verificationCode, new IRegisterCallback() {
-                @Override
-                public void onSuccess(User user) {
-                    Log.d(TAG, "Phone registration successful for user: " + user.getUsername());
-
-                    WritableMap userMap = new WritableNativeMap();
-                    userMap.putString("uid", user.getUid());
-                    userMap.putString("username", user.getUsername());
-                    userMap.putString("email", user.getEmail() != null ? user.getEmail() : "");
-                    userMap.putString("avatarUrl", "");
-
-                    promise.resolve(userMap);
-                }
-
-                @Override
-                public void onError(String code, String error) {
-                    Log.e(TAG, "Phone registration failed: " + code + " - " + error);
-                    promise.reject(code, "Phone registration failed: " + error);
-                }
-            });
-
-        } catch (Exception e) {
-            Log.e(TAG, "Exception during phone registration: " + e.getMessage(), e);
-            promise.reject("REGISTER_PHONE_ERROR", "Exception during phone registration: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void registerWithEmailVerification(String email, String password, String verificationCode, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Attempting registration with email verification: " + email);
-            if ("123456".equals(verificationCode)) {
-                registerWithEmail(email, password, countryCode, promise);
-            } else {
-                promise.reject("INVALID_VERIFICATION_CODE", "Código de verificación inválido");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Exception during email verification registration: " + e.getMessage(), e);
-            promise.reject("REGISTER_EMAIL_VERIFICATION_ERROR", "Exception during email verification registration: " + e.getMessage());
-        }
-    }
-
-    @ReactMethod
-    public void registerWithPhoneVerification(String phone, String password, String verificationCode, String countryCode, Promise promise) {
-        try {
-            Log.d(TAG, "Attempting registration with phone verification: " + phone);
-            if ("123456".equals(verificationCode)) {
-                registerWithPhone(phone, password, countryCode, promise);
-            } else {
-                promise.reject("INVALID_VERIFICATION_CODE", "Código de verificación inválido");
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Exception during phone verification registration: " + e.getMessage(), e);
-            promise.reject("REGISTER_PHONE_VERIFICATION_ERROR", "Exception during phone verification registration: " + e.getMessage());
         }
     }
 }

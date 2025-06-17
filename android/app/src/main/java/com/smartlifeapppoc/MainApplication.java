@@ -11,10 +11,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
 import com.facebook.react.defaults.DefaultReactNativeHost;
 import com.facebook.soloader.SoLoader;
 
-// Importar nuestro package personalizado
 import com.smartlifeapppoc.smartlife.SmartLifePackage;
 
-// Importar Tuya SDK (versión 6.2.2)
 import com.thingclips.smart.home.sdk.ThingHomeSdk;
 
 import java.util.List;
@@ -64,7 +62,7 @@ public class MainApplication extends Application implements ReactApplication {
     public void onCreate() {
         super.onCreate();
 
-        SoLoader.init(this, /* native exopackage */ false);
+        SoLoader.init(this, false);
 
         Log.d("MainApplication", "Application onCreate called");
 
