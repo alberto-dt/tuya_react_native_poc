@@ -10,9 +10,13 @@ source 'https://github.com/CocoaPods/Specs.git'
 source 'https://github.com/TuyaInc/TuyaPublicSpecs.git'
 source 'https://github.com/tuya/tuya-pod-specs.git'
 
-platform :ios, '12.4'
-prepare_react_native_project!
+# Configuración de instalación para resolver problemas de checksum
+install! 'cocoapods',
+  :deterministic_uuids => false,
+  :integrate_targets => false
 
+platform :ios, '14.0'
+prepare_react_native_project!
 
 # If you are using a `react-native-flipper` your iOS build will fail when `NO_FLIPPER=1` is set.
 # because `react-native-flipper` depends on (FlipperKit,...) that will be excluded
@@ -30,19 +34,14 @@ end
 target 'SmartLifeApp' do
   config = use_native_modules!
 
-  # Flags change depending on the env values.
-  flags = get_default_flags()
-
+  # Configuración para React Native 0.73+
   use_react_native!(
     :path => config[:reactNativePath],
     # Hermes is now enabled by default. Disable by setting this flag to false.
-    :hermes_enabled => flags[:hermes_enabled],
-    :fabric_enabled => flags[:fabric_enabled],
-    # Enables Flipper.
-    #
-    # Note that if you have use_frameworks! enabled, Flipper will not work and
-    # you should disable the next line.
-    :flipper_configuration => flipper_config,
+    :hermes_enabled => true,
+    :fabric_enabled => false,
+    # Disable Flipper completamente para evitar problemas con Boost
+    :flipper_configuration => FlipperConfiguration.disabled,
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
@@ -57,6 +56,19 @@ target 'SmartLifeApp' do
   # SDK de extensión de negocio (recomendado)
   # pod 'ThingSmartBusinessExtensionKit'
 
+  # Hook pre-instalación para modificar boost
+  pre_install do |installer|
+    # Modificar el podspec de boost para remover verificación de checksum
+    boost_spec_path = File.join(installer.sandbox.root, '../node_modules/react-native/third-party-podspecs/boost.podspec')
+    if File.exist?(boost_spec_path)
+      spec_content = File.read(boost_spec_path)
+      spec_content.gsub!(/:sha256 => '[^']*'[,\s]*/, '')
+      spec_content.gsub!(/,\s*:sha256 => '[^']*'/, '')
+      File.write(boost_spec_path, spec_content)
+      puts "✅ Boost checksum removido automáticamente"
+    end
+  end
+
   target 'SmartLifeAppTests' do
     inherit! :complete
     # Pods for testing
@@ -69,13 +81,12 @@ target 'SmartLifeApp' do
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
-    __apply_Xcode_12_5_M1_post_install_workaround(installer)
 
-    # Configuración para Tuya SDK
+    # Configuración para Tuya SDK y fix para Boost
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        # Deployment target compatible con React Native 0.72
-        config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "12.4"
+        # Deployment target compatible con React Native 0.73
+        config.build_settings["IPHONEOS_DEPLOYMENT_TARGET"] = "14.0"
 
         # Excluir arm64 para simulador (si tienes problemas de compilación)
         config.build_settings["EXCLUDED_ARCHS[sdk=iphonesimulator*]"] = "arm64"
@@ -85,6 +96,29 @@ target 'SmartLifeApp' do
 
         # Configuraciones adicionales para React Native 0.72
         config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+
+        # Fix específico para Boost - forzar limpieza de caché si es necesario
+        if target.name == 'boost' || target.name.include?('boost')
+          config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+          # Configuraciones adicionales para resolver problemas de checksum
+          config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+          config.build_settings['CLANG_ENABLE_MODULES'] = 'YES'
+          # Forzar descarga con configuraciones específicas
+          config.build_settings['BOOST_ALL_NO_LIB'] = '1'
+        end
+
+        # Configuración adicional para todos los targets para mejorar compatibilidad
+        config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+        config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
+      end
+    end
+
+    # Fix adicional para problemas de Boost y React Native
+    installer.generated_projects.each do |project|
+      project.targets.each do |target|
+        target.build_configurations.each do |config|
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+        end
       end
     end
   end

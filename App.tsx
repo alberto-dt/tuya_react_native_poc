@@ -15,33 +15,34 @@ import {
 } from 'react-native';
 
 import SmartLifeService from './services/SmartLifeService';
+import { getTuyaCredentials, validateCredentials as validateTuyaCredentials } from './config/TuyaConfig';
+import type { TuyaUser, TuyaHome, TuyaDevice, AppUIState, TuyaCredentials } from './types/tuya';
+
+// Importar componentes
 import RegisterScreen from './components/RegisterScreen';
 import HomeListScreen from './components/HomeListScreen';
 import AddHomeScreen from './components/AddHomeScreen';
 import DeviceListScreen from './components/DeviceListScreen';
 import AddDeviceScreen from './components/AddDeviceScreen';
-import type { TuyaUser, TuyaHome, TuyaDevice } from './services/SmartLifeService';
-
-type AppScreen = 'login' | 'register' | 'home' | 'homeList' | 'addHome' | 'deviceList' | 'addDevice';
 
 const App: React.FC = () => {
-  const emailRef = useRef('');
-  const passwordRef = useRef('');
+  const emailRef = useRef<string>('');
+  const passwordRef = useRef<string>('');
 
-  const [uiState, setUiState] = useState({
-    currentScreen: 'login' as AppScreen,
-    user: null as TuyaUser | null,
-    selectedHome: null as TuyaHome | null,
+  const [uiState, setUiState] = useState<AppUIState>({
+    currentScreen: 'login',
+    user: null,
+    selectedHome: null,
     isLoading: false,
   });
 
   const { currentScreen, user, selectedHome, isLoading } = uiState;
 
-  const updateUiState = useCallback((updates: Partial<typeof uiState>) => {
+  const updateUiState = useCallback((updates: Partial<AppUIState>) => {
     setUiState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const requestLocationPermission = useCallback(async () => {
+  const requestLocationPermission = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       try {
         const granted = await PermissionsAndroid.request(
@@ -66,23 +67,35 @@ const App: React.FC = () => {
   useEffect(() => {
     const initializeSDK = async (): Promise<void> => {
       try {
-        await SmartLifeService.initSDK(
-            'phrvfs7yuqg3rg8sw3km',
-            '74akfvfua53teq4wvepcd847panjpkee'
-        );
-        console.log('SDK initialized successfully');
+        const credentials: TuyaCredentials = getTuyaCredentials();
 
+        // Validar credenciales usando la función importada
+        if (!validateTuyaCredentials(credentials)) {
+          throw new Error('Invalid Tuya credentials for current platform');
+        }
+
+        console.log(`🔧 Initializing ${Platform.OS.toUpperCase()} SDK...`);
+
+        const result = await SmartLifeService.initSDK(
+            credentials.appKey,
+            credentials.appSecret
+        );
+
+        console.log(`✅ ${Platform.OS.toUpperCase()} SDK initialized:`, result);
         await requestLocationPermission();
       } catch (error) {
-        console.error('Error initializing SDK:', error);
-        Alert.alert('Error', 'Failed to initialize Smart Life SDK');
+        console.error(`❌ Error initializing ${Platform.OS.toUpperCase()} SDK:`, error);
+        Alert.alert(
+            'Error',
+            `Failed to initialize Smart Life SDK on ${Platform.OS}\n\n${(error as Error).message}`
+        );
       }
     };
 
     initializeSDK();
   }, [requestLocationPermission]);
 
-  const validateCredentials = useCallback((): boolean => {
+  const validateInputCredentials = useCallback((): boolean => {
     if (!emailRef.current.trim() || !passwordRef.current.trim()) {
       Alert.alert('Error', 'Por favor ingresa email y contraseña');
       return false;
@@ -212,7 +225,7 @@ const App: React.FC = () => {
   }, [goToRegister]);
 
   const handleLogin = useCallback(async (): Promise<void> => {
-    if (!validateCredentials()) return;
+    if (!validateInputCredentials()) return;
 
     try {
       updateUiState({ isLoading: true });
@@ -231,7 +244,7 @@ const App: React.FC = () => {
     } finally {
       updateUiState({ isLoading: false });
     }
-  }, [validateCredentials, updateUiState, handleLoginSuccess, handleLoginError]);
+  }, [validateInputCredentials, updateUiState, handleLoginSuccess, handleLoginError]);
 
   const handleLogout = useCallback(async (): Promise<void> => {
     try {
@@ -248,7 +261,7 @@ const App: React.FC = () => {
     }
   }, [updateUiState]);
 
-  const LoadingScreen = () => (
+  const LoadingScreen: React.FC = () => (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
         <Text style={styles.loadingText}>Conectando...</Text>
@@ -263,7 +276,7 @@ const App: React.FC = () => {
     passwordRef.current = value;
   }, []);
 
-  const InputFields = React.memo(() => (
+  const InputFields: React.FC = React.memo(() => (
       <>
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email:</Text>
@@ -301,6 +314,7 @@ const App: React.FC = () => {
       </>
   ));
 
+  // Renderizado condicional de pantallas
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -361,13 +375,16 @@ const App: React.FC = () => {
     );
   }
 
+  // Pantalla de login por defecto
   return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#2196F3" />
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.header}>
             <Text style={styles.title}>Smart Life App</Text>
-            <Text style={styles.subtitle}>Tuya Smart Life Integration</Text>
+            <Text style={styles.subtitle}>
+              Tuya Smart Life Integration - {Platform.OS.toUpperCase()}
+            </Text>
           </View>
 
           <View style={styles.loginContainer}>
@@ -392,6 +409,15 @@ const App: React.FC = () => {
                 ✅ Crear Cuenta Nueva
               </Text>
             </TouchableOpacity>
+
+            {/* Debug info para desarrollo */}
+            {__DEV__ && (
+                <View style={styles.debugContainer}>
+                  <Text style={styles.debugText}>
+                    🔧 Platform: {Platform.OS} | Debug Mode
+                  </Text>
+                </View>
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -483,6 +509,18 @@ const styles = StyleSheet.create({
   },
   registerButtonText: {
     color: '#4CAF50',
+  },
+  debugContainer: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
 
