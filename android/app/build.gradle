@@ -1,27 +1,77 @@
 apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+/**
+ * Configuración de React Native 0.76
+ * Configuración más estable que 0.77
+ */
 react {
+    /* Folders */
+    //   The root of your project, i.e. where "package.json" lives. Default is '..'
+    // root = file("../")
+    //   The folder where the react-native NPM package is. Default is ../node_modules/react-native
+    // reactNativeDir = file("../node_modules/react-native")
+    //   The folder where the react-native Codegen package is. Default is ../node_modules/@react-native/codegen
+    // codegenDir = file("../node_modules/@react-native/codegen")
+
+    /* Variants */
+    //   The list of variants to that are debuggable. For those we're going to
+    //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
+    //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
+    // debuggableVariants = ["liteDebug", "prodDebug"]
+
+    /* Bundling */
+    //   A list containing the node command and its flags. Default is just 'node'.
+    // nodeExecutableAndArgs = ["node"]
+    //
+    //   The command to run when bundling. Default is 'bundle'
+    // bundleCommand = "ram-bundle"
+    //
+    //   The path to the CLI configuration file. Default is empty.
+    // bundleConfig = file(../rn-cli.config.js)
+    //
+    //   The name of the generated asset file containing your JS bundle
+    // bundleAssetName = "MyApplication.android.bundle"
+    //
+    //   The entry file for bundle generation. Default is 'index.android.js' or 'index.js'
+    // entryFile = file("../js/MyApplication.android.js")
+    //
+    //   A list of extra flags to pass to the 'bundle' commands.
+    //   See https://github.com/react-native-community/cli/blob/main/docs/commands.md#bundle
+    // extraPackagerArgs = []
+
+    /* Hermes Commands */
+    //   The hermes command to run. By default it is 'hermesc'
+    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
+    //
+    //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
+    // hermesFlags = ["-O", "-output-source-map"]
 }
 
+/**
+ * Configuraciones del proyecto
+ */
 def enableProguardInReleaseBuilds = false
 def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.smartlifeapppoc"
+
     defaultConfig {
         applicationId "com.smartlifeapppoc"
-        minSdkVersion 23
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
 
         multiDexEnabled true
+
         ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a"
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 
         manifestPlaceholders = [
@@ -36,11 +86,15 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
-    packagingOptions {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    packaging {
         pickFirst 'lib/*/libc++_shared.so'
         pickFirst '**/libjsc.so'
         pickFirst '**/libreactnativejni.so'
@@ -50,25 +104,30 @@ android {
         pickFirst 'META-INF/NOTICE'
         pickFirst 'META-INF/NOTICE.txt'
         pickFirst 'META-INF/services/javax.annotation.processing.Processor'
+        // Nuevas exclusiones para RN 0.77
+        pickFirst '**/libhermes.so'
+        pickFirst '**/libjscexecutor.so'
+        pickFirst '**/libfb.so'
+        pickFirst '**/libfbjni.so'
     }
 
-    aaptOptions {
+    androidResources {
         ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
-        additionalParameters "--warn-manifest-validation"
     }
 
-    lintOptions {
+    lint {
         disable 'MissingTranslation'
         disable 'ExtraTranslation'
         disable 'InvalidPackage'
         disable 'StringFormatMatches'
         disable 'StringFormatInvalid'
+        disable 'PluralsCandidate'
+        // Nuevas configuraciones para React Native 0.77 y Tuya
+        disable 'StringFormatInvalid'
+        disable 'StringFormatCount'
+        disable 'StringFormatMatches'
         checkReleaseBuilds false
         abortOnError false
-    }
-
-    androidResources {
-        ignoreAssetsPattern "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~"
     }
 
     signingConfigs {
@@ -92,9 +151,8 @@ android {
     }
 
     repositories {
-        flatDir {
-            dirs 'libs'
-        }
+        google()
+        mavenCentral()
 
         maven {
             url 'https://maven-other.tuya.com/repository/maven-releases/'
@@ -105,16 +163,10 @@ android {
             name 'TuyaMavenCommercial'
         }
 
-        google()
-        mavenCentral()
-
         maven { url 'https://jitpack.io' }
 
-        jcenter {
-            content {
-                includeModule("jp.wasabeef", "recyclerview-animators")
-                includeModule("com.geyifeng.immersionbar", "immersionbar")
-            }
+        flatDir {
+            dirs 'libs'
         }
     }
 }
@@ -125,118 +177,152 @@ configurations.all {
     exclude group: "commons-io", module: "commons-io"
 
     resolutionStrategy {
+        // Actualizaciones para RN 0.77 compatibility
         force 'com.google.android.flexbox:flexbox:3.0.0'
         force 'jp.wasabeef:recyclerview-animators:4.0.2'
         force 'com.squareup.okhttp3:okhttp:4.12.0'
         force 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
-        force 'com.squareup.okio:okio:3.2.0'
+        force 'com.squareup.okio:okio:3.6.0'
         force 'commons-io:commons-io:2.11.0'
-        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
-        force 'org.apache.commons:commons-lang3:3.12.0'
-
-        force 'com.facebook.fbjni:fbjni:0.3.0'
-
-        force 'androidx.core:core:1.8.0'
-        force 'androidx.fragment:fragment:1.5.0'
-        force 'androidx.appcompat:appcompat:1.5.0'
-        force 'com.google.android.material:material:1.6.1'
-
-        force 'com.google.android.exoplayer:exoplayer-core:2.18.7'
-        force 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
-
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10'
+        force 'com.facebook.fbjni:fbjni:0.5.1'
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.fragment:fragment:1.6.2'
+        force 'androidx.appcompat:appcompat:1.6.1'
+        force 'com.google.android.material:material:1.11.0'
+        force 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+        force 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
         force 'com.geyifeng.immersionbar:immersionbar:3.2.2'
+
+        // Nuevas dependencias específicas para RN 0.77
+        force 'com.facebook.react:react-android:0.77.0'
+        force 'com.facebook.react:hermes-android:0.77.0'
+
+        // Excluir explícitamente la dependencia problemática
+        eachDependency { details ->
+            if (details.requested.group == 'com.thingclips.smart' &&
+                    details.requested.name == 'thingsmart-modularCampAnno') {
+                details.useTarget group: 'androidx.annotation', name: 'annotation', version: '1.6.0'
+            }
+
+            // Asegurar compatibilidad con las nuevas versiones de React Native
+            if (details.requested.group == 'com.facebook.react') {
+                details.useVersion '0.77.0'
+            }
+        }
 
         dependencySubstitution {
             substitute module('com.google.android:flexbox') using module('com.google.android.flexbox:flexbox:3.0.0')
+            substitute module('com.thingclips.smart:thingsmart-modularCampAnno') using module('androidx.annotation:annotation:1.6.0')
         }
     }
 }
 
 dependencies {
+    // React Native 0.76 core dependencies
     implementation("com.facebook.react:react-android")
 
+    // Motor JavaScript condicional
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation jscFlavor
+    }
+
+    // Enforced platform para Tuya
     implementation enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
 
+    // Dependencias existentes mantenidas
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
     implementation 'jp.wasabeef:recyclerview-animators:4.0.2'
-
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
-    implementation 'com.squareup.okio:okio:3.2.0'
-
+    implementation 'com.squareup.okio:okio:3.6.0'
     implementation 'commons-io:commons-io:2.11.0'
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.8.10'
-    implementation 'com.facebook.fbjni:fbjni:0.3.0'
-
-    implementation 'androidx.core:core:1.8.0'
-    implementation 'androidx.fragment:fragment:1.5.0'
-    implementation 'androidx.appcompat:appcompat:1.5.0'
-    implementation 'com.google.android.material:material:1.6.1'
-
-    implementation 'com.google.android.exoplayer:exoplayer-core:2.18.7'
-    implementation 'com.google.android.exoplayer:exoplayer-ui:2.18.7'
-
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10'
+    implementation 'com.facebook.fbjni:fbjni:0.5.1'
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.fragment:fragment:1.6.2'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
     implementation 'com.geyifeng.immersionbar:immersionbar:3.2.2'
 
-    debugImplementation 'com.facebook.fresco:fresco:2.6.0'
-    debugImplementation 'com.facebook.fresco:drawee:2.6.0'
-    debugImplementation 'com.facebook.fresco:imagepipeline:2.6.0'
+    // Fresco dependencies - actualizadas para RN 0.77
+    debugImplementation 'com.facebook.fresco:fresco:3.1.3'
+    debugImplementation 'com.facebook.fresco:drawee:3.1.3'
+    debugImplementation 'com.facebook.fresco:imagepipeline:3.1.3'
 
+    // Tuya Smart dependencies con exclusiones mejoradas
     implementation('com.thingclips.smart:thingsmart:6.2.2') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'com.facebook.react' // Nueva exclusión para evitar conflictos
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-basekit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-bizkit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-devicekit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
         exclude group: 'com.squareup.okio'
         exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
     }
 
     implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
         exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
         exclude group: 'com.facebook.fbjni', module: 'fbjni'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'com.squareup.okhttp3'
@@ -245,22 +331,10 @@ dependencies {
         exclude group: 'com.tencent.tauth', module: 'qqopensdk'
         exclude group: 'com.huawei.hms', module: 'base'
         exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
+        exclude group: 'com.facebook.react'
     }
 
+    // Local AAR files
     implementation fileTree(dir: 'libs', include: ['*.aar'])
     implementation 'com.alibaba:fastjson:1.1.67.android'
-
-    debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}")
-    debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
-        exclude group:'com.squareup.okhttp3', module:'okhttp'
-    }
-    debugImplementation("com.facebook.flipper:flipper-fresco-plugin:${FLIPPER_VERSION}")
-
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
 }
-
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
