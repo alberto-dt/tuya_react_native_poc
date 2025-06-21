@@ -1,41 +1,33 @@
 {
+  "extends": "@react-native/typescript-config/tsconfig.json",
   "compilerOptions": {
-    "target": "esnext",
-    "lib": ["es2017"],
     "allowJs": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./types", "./node_modules/@types"],
+    "lib": ["ES2022", "DOM"],
+    "moduleResolution": "node",
+    "noEmit": true,
+    "strict": true,
+    "target": "esnext",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@/types/*": ["types/*"],
-      "@/services/*": ["services/*"],
-      "@/hooks/*": ["hooks/*"],
-      "@/components/*": ["components/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
-    "src/**/*",
-    "types/**/*",
-    "services/**/*",
-    "hooks/**/*",
-    "components/**/*",
-    "App.tsx",
-    "index.js"
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx"
   ],
   "exclude": [
     "node_modules",
-    "android",
-    "ios"
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js"
   ]
 }

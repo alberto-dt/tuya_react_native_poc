@@ -10,6 +10,7 @@
 		0C80B921A6F3F58F76C31292 /* libPods-SmartLifeAppPOC.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-SmartLifeAppPOC.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		8111597E2E0628E100593D38 /* TuyaBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 8111597D2E0628E100593D38 /* TuyaBridge.m */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		8F6B673F5A4C19527FF30050 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -23,6 +24,8 @@
 		5709B34CF0A7D63546082F79 /* Pods-SmartLifeAppPOC.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SmartLifeAppPOC.release.xcconfig"; path = "Target Support Files/Pods-SmartLifeAppPOC/Pods-SmartLifeAppPOC.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-SmartLifeAppPOC.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SmartLifeAppPOC.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = SmartLifeAppPOC/AppDelegate.swift; sourceTree = "<group>"; };
+		8111597C2E0628E100593D38 /* TuyaBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TuyaBridge.h; sourceTree = "<group>"; };
+		8111597D2E0628E100593D38 /* TuyaBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TuyaBridge.m; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = SmartLifeAppPOC/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -42,6 +45,8 @@
 		13B07FAE1A68108700A75B9A /* SmartLifeAppPOC */ = {
 			isa = PBXGroup;
 			children = (
+				8111597C2E0628E100593D38 /* TuyaBridge.h */,
+				8111597D2E0628E100593D38 /* TuyaBridge.m */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -131,7 +136,7 @@
 				LastUpgradeCheck = 1210;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						LastSwiftMigration = 1120;
+						LastSwiftMigration = 1640;
 					};
 				};
 			};
@@ -247,6 +252,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				8111597E2E0628E100593D38 /* TuyaBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
