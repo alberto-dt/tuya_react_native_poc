@@ -229,8 +229,117 @@ dependencies {
         implementation jscFlavor
     }
 
-    // Enforced platform para Tuya
-    implementation enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
+    // ========================================
+    // TUYA SMART DEPENDENCIES - ACTUALIZADAS
+    // ========================================
+
+    // BOM para gestión de versiones - CRÍTICO que vaya primero
+    api enforcedPlatform("com.thingclips.smart:thingsmart-BizBundlesBom:6.2.16")
+
+    // Core Tuya Smart
+    implementation('com.thingclips.smart:thingsmart:6.2.2') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Tuya Business Bundles - Base Kit
+    implementation('com.thingclips.smart:thingsmart-bizbundle-basekit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Business Kit
+    implementation('com.thingclips.smart:thingsmart-bizbundle-bizkit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Device Kit
+    implementation('com.thingclips.smart:thingsmart-bizbundle-devicekit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Device Activator - NUEVA DEPENDENCIA REQUERIDA
+    implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // QR Code MLKit - NUEVA DEPENDENCIA PARA ESCANEO
+    implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Generic Pairing BizBundle - COMPONENTE DEPRECADO (considera migrar)
+    // NOTA: Este componente ya no se mantiene según la documentación oficial
+    // Su funcionalidad se ha migrado al servicio de emparejamiento de dispositivos
+    // Usando versión específica ya que puede no estar en el BOM
+    implementation('com.thingclips.smart:ThingSmartActivatorExtraBizBundle:5.0.0') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.facebook.react'
+    }
+
+    // Panel Kit
+    implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
+        exclude group: 'com.thingclips.smart', module: 'react-native'
+        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
+        exclude group: 'com.facebook.fbjni', module: 'fbjni'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'com.squareup.okhttp3'
+        exclude group: 'com.squareup.okio'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+        exclude group: 'com.tencent.tauth', module: 'qqopensdk'
+        exclude group: 'com.huawei.hms', module: 'base'
+        exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
+        exclude group: 'com.facebook.react'
+    }
+
+    // ========================================
+    // OTRAS DEPENDENCIAS EXISTENTES
+    // ========================================
 
     // Dependencias existentes mantenidas
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
@@ -253,86 +362,6 @@ dependencies {
     debugImplementation 'com.facebook.fresco:fresco:3.1.3'
     debugImplementation 'com.facebook.fresco:drawee:3.1.3'
     debugImplementation 'com.facebook.fresco:imagepipeline:3.1.3'
-
-    // Tuya Smart dependencies con exclusiones mejoradas
-    implementation('com.thingclips.smart:thingsmart:6.2.2') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'com.facebook.react' // Nueva exclusión para evitar conflictos
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-basekit') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.facebook.react'
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-bizkit') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.facebook.react'
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-devicekit') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.facebook.react'
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-device_activator') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.facebook.react'
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-qrcode_mlkit') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.facebook.react'
-    }
-
-    implementation('com.thingclips.smart:thingsmart-bizbundle-panel') {
-        exclude group: 'com.thingclips.smart', module: 'react-native'
-        exclude group: 'com.thingclips.smart', module: 'thingsmart-modularCampAnno'
-        exclude group: 'com.facebook.fbjni', module: 'fbjni'
-        exclude group: 'commons-io', module: 'commons-io'
-        exclude group: 'com.squareup.okhttp3'
-        exclude group: 'com.squareup.okio'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
-        exclude group: 'com.tencent.tauth', module: 'qqopensdk'
-        exclude group: 'com.huawei.hms', module: 'base'
-        exclude group: 'com.gyf.immersionbar', module: 'immersionbar'
-        exclude group: 'com.facebook.react'
-    }
 
     // Local AAR files
     implementation fileTree(dir: 'libs', include: ['*.aar'])
