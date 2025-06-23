@@ -62,36 +62,173 @@ If everything is set up correctly, you should see your new app running in the An
 
 This is one way to run your app — you can also build it directly from Android Studio or Xcode.
 
-## Step 3: Modify your app
+# 📱 SmartLifeAppPOC - Integración iOS con ThingSmart SDK
 
-Now that you have successfully run the app, let's make changes!
+Este proyecto integra el SDK de Tuya (ThingSmart) para controlar dispositivos IoT desde una app React Native en iOS. A continuación se documenta todo lo necesario para configurar, compilar e implementar correctamente el proyecto en iOS.
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+---
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## ✅ Requisitos mínimos
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+- macOS con Xcode 15+
+- Node.js ≥ 16
+- CocoaPods ≥ 1.12
+- React Native 0.77
+- iOS Deployment Target: **15.1**
+- Cuenta de desarrollador Apple con **Team ID**
 
-## Congratulations! :tada:
+---
 
-You've successfully run and modified your React Native App. :partying_face:
+## 🛠️ Configuración del proyecto iOS
 
-### Now what?
+### 1. `Info.plist`
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+Se añadieron las siguientes claves necesarias para permisos en tiempo de ejecución:
 
-# Troubleshooting
+```xml
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>This app needs location access to configure smart devices</string>
+<key>NSLocalNetworkUsageDescription</key>
+<string>This app needs local network access to discover and control smart devices</string>
+<key>NSCameraUsageDescription</key>
+<string>This app needs camera access to scan QR codes for device configuration</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>This app needs microphone access for voice control features</string>
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>This app needs Bluetooth access to configure smart devices</string>
+<key>NSBluetoothPeripheralUsageDescription</key>
+<string>This app needs Bluetooth access to configure smart devices</string>
+```
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+> Ruta: `ios/SmartLifeAppPOC/Info.plist`
 
-# Learn More
+---
 
-To learn more about React Native, take a look at the following resources:
+### 2. Podfile
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Incluye las fuentes oficiales de Tuya, la versión del SDK y ajustes para React Native 0.77:
+
+```ruby
+source 'https://github.com/CocoaPods/Specs.git'
+source 'https://github.com/TuyaInc/TuyaPublicSpecs.git'
+source 'https://github.com/tuya/tuya-pod-specs.git'
+
+platform :ios, '15.1'
+...
+
+target 'SmartLifeAppPOC' do
+  ...
+  pod 'ThingSmartHomeKit', '~> 6.2.0'
+  pod 'ThingSmartCryption', :path => './ios_core_sdk'
+  pod 'ThingSmartActivatorKit'
+
+  post_install do |installer|
+    ...
+    config.build_settings["DEVELOPMENT_TEAM"] = "YOUR_TEAM_ID"
+  end
+end
+```
+
+> Ruta: `ios/Podfile`
+
+---
+
+## 🧠 Bridge nativo - Comunicación JS ↔️ iOS
+
+### Archivos creados:
+
+#### `TuyaBridge.h`
+
+```objc
+#import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
+
+@interface TuyaBridge : RCTEventEmitter <RCTBridgeModule>
+@end
+```
+
+#### `TuyaBridge.m`
+
+Contiene:
+
+- Inicialización de SDK `ThingSmartSDK`
+- Registro/login de usuario por email
+- Logout
+- Creación y listado de hogares
+- Emisión de eventos (`TuyaUserLoginSuccess`, `TuyaUserLoginError`, etc.)
+- Acceso a propiedades del usuario
+
+> Ruta: `ios/SmartLifeAppPOC/TuyaBridge.h/.m`
+
+---
+
+## 📦 Instalación
+
+```bash
+cd ios
+pod install
+```
+
+---
+
+## 🚀 Compilación y ejecución
+
+```bash
+npx react-native run-ios
+```
+
+---
+
+## 🔄 Métodos exportados a React Native
+
+| Método JS (desde `SmartLifeModule`)        | Descripción                                    |
+| ------------------------------------------ | ---------------------------------------------- |
+| `initSDK(appKey, secretKey)`               | Inicializa el SDK de Tuya con las credenciales |
+| `registerWithEmail(email, password, code)` | Registra un usuario con email                  |
+| `loginWithEmail(code, email, password)`    | Inicia sesión con email                        |
+| `logout()`                                 | Cierra la sesión del usuario                   |
+| `getHomeList()`                            | Obtiene los hogares asociados al usuario       |
+| `createHome(name, geoName, lat, lon)`      | Crea un nuevo hogar en la nube de Tuya         |
+| `debugUserProperties()`                    | Muestra en consola las propiedades del usuario |
+| `getCurrentUser()`                         | Devuelve los datos del usuario actual          |
+
+---
+
+## 📣 Eventos nativos emitidos
+
+Escuchar desde React Native:
+
+```ts
+import { NativeEventEmitter, NativeModules } from "react-native";
+
+const { SmartLifeModule } = NativeModules;
+const emitter = new NativeEventEmitter(SmartLifeModule);
+
+emitter.addListener("TuyaUserLoginSuccess", (user) => {
+  console.log("User logged in:", user);
+});
+```
+
+---
+
+## 🧪 Tips y advertencias
+
+- ✅ Usa cuentas reales de Tuya/ThingCloud para pruebas.
+- ⚠️ No olvides reemplazar `YOUR_TEAM_ID` en el `Podfile`.
+- 🧪 Se recomienda desactivar `DebugMode` en producción:
+  ```objc
+  [[ThingSmartSDK sharedInstance] setDebugMode:NO];
+  ```
+
+---
+
+## 📚 Referencias
+
+- [Tuya RN SDK Docs](https://developer.tuya.com/en/docs/iot/react-native-sdk?id=Ka7k8ucx0v6e2)
+- [ThingSmart v6 Migration Guide](https://developer.tuya.com/en/docs/iot/tuya-ios-sdk-upgrade-notes?id=Kaiuzr79z7dko)
+
+---
+
+## © SmartLifeAppPOC
+
+Desarrollado con 💡 para la gestión inteligente del hogar.
